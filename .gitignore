@@ -1,0 +1,75 @@
+# Dependencias
+node_modules/
+package-lock.json
+yarn.lock
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Entornos de desarrollo
+.DS_Store
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# Cobertura
+yarn-error.log
+coverage/
+.nyc_output/
+
+# Archivos de sistema operativo
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Archivos temporales
+*.tmp
+*.temp
+*~
+
+# Archivos de configuración local
+.eslintcache
+
+# Archivos de entorno local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.idea
+.vscode/*
+!.vscode/extensions.json
+.idea/*
+!.idea/runConfigurations/
+
+# Archivos de depuración
+.vercel
+.next
+.nuxt
+.cache
+
+# Archivos de paquetes
+*.tgz
+
+# Archivos de test
+coverage/
+.nyc_output/
+
+# Archivos de IDE
+*.sublime-*
