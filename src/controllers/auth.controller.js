@@ -405,21 +405,28 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_KEY;
-    if (!supabaseUrl || !supabaseKey) {
-      return res.status(500).json({
+    // Decodificar y verificar el access_token de Supabase para obtener el userId (sub)
+    let userId;
+    try {
+      const decoded = jwt.verify(access_token, process.env.SUPABASE_JWT_SECRET);
+      userId = decoded?.sub;
+    } catch (e) {
+      return res.status(400).json({
         success: false,
-        message: 'Configuración de Supabase incompleta'
+        message: 'Token de restablecimiento inválido o expirado',
+        error: process.env.NODE_ENV === 'development' ? e.message : {}
       });
     }
 
-    // Crear cliente autenticado con el access_token del enlace de reset
-    const sbWithToken = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: `Bearer ${access_token}` } }
-    });
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se pudo obtener el usuario del token de restablecimiento'
+      });
+    }
 
-    const { error } = await sbWithToken.auth.updateUser({ password: newPassword });
+    // Actualizar la contraseña usando la API de administrador de Supabase
+    const { error } = await supabase.auth.admin.updateUserById(userId, { password: newPassword });
     if (error) {
       return res.status(400).json({
         success: false,
