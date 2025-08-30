@@ -15,6 +15,17 @@ const register = async (req, res) => {
   try {
     const { email, password, nombre, apellido, telefono, rol = 'cliente', parking_ids } = req.body;
 
+    // Normalizar y validar rol recibido (compatibilidad con 'admin')
+    let normalizedRol = rol || 'cliente';
+    if (normalizedRol === 'admin') normalizedRol = 'admin_general';
+    const allowedRoles = ['admin_general', 'admin_parking', 'empleado', 'cliente'];
+    if (!allowedRoles.includes(normalizedRol)) {
+      return res.status(400).json({
+        success: false,
+        message: `Rol inválido: ${rol}. Roles permitidos: ${allowedRoles.join(', ')}`
+      });
+    }
+
     // Validar datos requeridos
     if (!email || !password || !nombre || !apellido) {
       return res.status(400).json({
@@ -37,7 +48,16 @@ const register = async (req, res) => {
       .from('usuario')
       .select('id_usuario')
       .eq('email', email)
-      .single();
+      .maybeSingle();
+
+    if (checkError) {
+      // Si no es el caso de 0 filas, reportar
+      return res.status(500).json({
+        success: false,
+        message: 'Error verificando existencia de usuario',
+        error: process.env.NODE_ENV === 'development' ? checkError.message : {}
+      });
+    }
 
     if (existingUser) {
       return res.status(400).json({
@@ -78,7 +98,7 @@ const register = async (req, res) => {
       apellido,
       telefono,
       email,
-      rol
+      rol: normalizedRol
     };
 
     let nuevoUsuario;
@@ -104,8 +124,8 @@ const register = async (req, res) => {
 
     // Si el rol es admin_parking o empleado y se envían parking_ids, crear asignaciones en usuario_parking
     let parkings = [];
-    if ((rol === 'admin_parking' || rol === 'empleado') && Array.isArray(parking_ids) && parking_ids.length > 0) {
-      const assignments = parking_ids.map((pid) => ({ id_parking: pid, rol_en_parking: rol }));
+    if ((normalizedRol === 'admin_parking' || normalizedRol === 'empleado') && Array.isArray(parking_ids) && parking_ids.length > 0) {
+      const assignments = parking_ids.map((pid) => ({ id_parking: pid, rol_en_parking: normalizedRol }));
       await UsuarioParking.addBulk(authData.user.id, assignments);
       parkings = parking_ids;
     }
@@ -113,7 +133,7 @@ const register = async (req, res) => {
     // Actualizar app_metadata en Supabase Auth (role y parkings)
     try {
       const { data: _upd, error: updErr } = await supabase.auth.admin.updateUserById(authData.user.id, {
-        app_metadata: { role: rol, parkings }
+        app_metadata: { role: normalizedRol, parkings }
       });
       if (updErr) {
         // Log, pero no bloquear registro
@@ -125,7 +145,7 @@ const register = async (req, res) => {
 
     // Generar token JWT
     const token = jwt.sign(
-      { id: authData.user.id, email: authData.user.email, rol, parkings },
+      { id: authData.user.id, email: authData.user.email, rol: normalizedRol, parkings },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
