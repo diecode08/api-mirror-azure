@@ -8,7 +8,8 @@ class Usuario {
   static async getAll() {
     const { data, error } = await supabase
       .from('usuario')
-      .select('*');
+      .select('*')
+      .is('deleted_at', null);
     
     if (error) throw error;
     return data;
@@ -24,6 +25,7 @@ class Usuario {
       .from('usuario')
       .select('*')
       .eq('id_usuario', id)
+      .is('deleted_at', null)
       .single();
     
     // Si no hay filas, Supabase devuelve PGRST116 con .single()
@@ -79,6 +81,28 @@ class Usuario {
       .delete()
       .eq('id_usuario', id);
     
+    if (error) throw error;
+    return true;
+  }
+
+  /**
+   * Borrado lógico de un usuario
+   * @param {string} id - ID del usuario
+   * @param {{ deleted_by?: string, motivo_baja?: string, bloquear?: boolean }} opts
+   */
+  static async softDelete(id, opts = {}) {
+    const payload = {
+      deleted_at: new Date().toISOString(),
+      deleted_by: opts.deleted_by ?? null,
+      motivo_baja: opts.motivo_baja ?? null,
+    };
+    if (opts.bloquear) payload.bloqueado = true;
+
+    const { error } = await supabase
+      .from('usuario')
+      .update(payload)
+      .eq('id_usuario', id);
+
     if (error) throw error;
     return true;
   }

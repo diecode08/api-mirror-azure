@@ -26,6 +26,31 @@ const getAllUsuarios = async (req, res) => {
 };
 
 /**
+ * Bloquear / Desbloquear un usuario (toggle)
+ */
+const toggleBloqueoUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const usuario = await Usuario.getById(id);
+    if (!usuario) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+    if (usuario.deleted_at) {
+      return res.status(400).json({ success: false, message: 'No se puede cambiar bloqueo de un usuario eliminado' });
+    }
+
+    const nuevoEstado = !Boolean(usuario.bloqueado);
+    const actualizado = await Usuario.update(id, { bloqueado: nuevoEstado });
+
+    return res.status(200).json({ success: true, message: 'Estado de bloqueo actualizado', data: actualizado });
+  } catch (e) {
+    console.error('Error al cambiar estado de bloqueo:', e);
+    return res.status(500).json({ success: false, message: 'Error al cambiar estado de bloqueo' });
+  }
+};
+
+/**
  * Obtener un usuario por su ID
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
@@ -106,6 +131,7 @@ const updateUsuario = async (req, res) => {
 const deleteUsuario = async (req, res) => {
   try {
     const { id } = req.params;
+    const { motivo_baja } = req.body || {};
     
     // Verificar si el usuario existe
     const existingUser = await Usuario.getById(id);
@@ -116,22 +142,12 @@ const deleteUsuario = async (req, res) => {
       });
     }
     
-    // Eliminar usuario de Supabase Auth
-    const { error: authError } = await supabase.auth.admin.deleteUser(id);
-    if (authError) {
-      return res.status(500).json({
-        success: false,
-        message: 'Error al eliminar usuario de autenticación',
-        error: process.env.NODE_ENV === 'development' ? authError.message : {}
-      });
-    }
-    
-    // Eliminar usuario de la tabla Usuario
-    await Usuario.delete(id);
+    // Borrado lógico en la tabla Usuario (opcional: bloquear)
+    await Usuario.softDelete(id, { deleted_by: req.user?.id, motivo_baja, bloquear: true });
     
     res.status(200).json({
       success: true,
-      message: 'Usuario eliminado exitosamente'
+      message: 'Usuario eliminado (borrado lógico) exitosamente'
     });
   } catch (error) {
     console.error('Error al eliminar usuario:', error);
@@ -300,5 +316,6 @@ module.exports = {
   getUsuariosByRol,
   getUserParkings,
   assignParkingsToUser,
-  removeParkingFromUser
+  removeParkingFromUser,
+  toggleBloqueoUsuario
 };

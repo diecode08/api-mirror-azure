@@ -95,7 +95,7 @@ const hasRole = (roles) => {
       // Obtener el usuario de la base de datos
       const { data: usuario, error } = await supabase
         .from('usuario')
-        .select('rol')
+        .select('rol, bloqueado, deleted_at')
         .eq('id_usuario', userId)
         .single();
       
@@ -107,6 +107,14 @@ const hasRole = (roles) => {
         });
       }
       
+      // Validar estado de cuenta
+      if (!usuario || usuario.deleted_at) {
+        return res.status(403).json({ success: false, message: 'Cuenta eliminada' });
+      }
+      if (usuario.bloqueado) {
+        return res.status(403).json({ success: false, message: 'Cuenta bloqueada' });
+      }
+
       // Jerarquía: admin_general tiene acceso total
       const rolesArray = Array.isArray(roles) ? roles : [roles];
       if (usuario && usuario.rol === 'admin_general') {

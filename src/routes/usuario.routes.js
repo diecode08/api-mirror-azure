@@ -9,6 +9,7 @@ router.get('/rol/:rol', verifyToken, hasRole(['admin_general']), usuarioControll
 router.get('/:id', verifyToken, usuarioController.getUsuarioById);
 router.put('/:id', verifyToken, usuarioController.updateUsuario);
 router.delete('/:id', verifyToken, hasRole(['admin_general']), usuarioController.deleteUsuario);
+router.patch('/:id/bloqueo', verifyToken, hasRole(['admin_general']), usuarioController.toggleBloqueoUsuario);
 
 // Multiparking: gestión de asignaciones
 router.get('/:id/parkings', verifyToken, usuarioController.getUserParkings);
