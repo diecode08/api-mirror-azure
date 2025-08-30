@@ -215,10 +215,12 @@ const login = async (req, res) => {
     }
 
     if (!usuario) {
-      return res.status(404).json({
-        success: false,
-        message: 'Usuario no encontrado'
-      });
+      // Si no existe en nuestra tabla, puede estar eliminado lógicamente
+      return res.status(403).json({ success: false, message: 'Cuenta eliminada' });
+    }
+
+    if (usuario.bloqueado) {
+      return res.status(403).json({ success: false, message: 'Cuenta bloqueada' });
     }
 
     // Sincronizar app_metadata en login (role y parkings)
@@ -368,6 +370,24 @@ const forgotPassword = async (req, res) => {
       });
     }
 
+    // Verificar estado del usuario en nuestra tabla antes de enviar correo
+    const { data: usr, error: usrErr } = await supabase
+      .from('usuario')
+      .select('id_usuario, bloqueado, deleted_at')
+      .eq('email', email)
+      .maybeSingle();
+    if (usrErr) {
+      return res.status(500).json({ success: false, message: 'Error al verificar usuario' });
+    }
+    if (usr) {
+      if (usr.deleted_at) {
+        return res.status(403).json({ success: false, message: 'Cuenta eliminada. No es posible recuperar contraseña.' });
+      }
+      if (usr.bloqueado) {
+        return res.status(403).json({ success: false, message: 'Cuenta bloqueada. Contacta al administrador.' });
+      }
+    }
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) {
       return res.status(400).json({
@@ -423,6 +443,22 @@ const resetPassword = async (req, res) => {
         success: false,
         message: 'No se pudo obtener el usuario del token de restablecimiento'
       });
+    }
+
+    // Verificar estado del usuario en nuestra tabla
+    const { data: usr, error: usrErr } = await supabase
+      .from('usuario')
+      .select('bloqueado, deleted_at')
+      .eq('id_usuario', userId)
+      .single();
+    if (usrErr) {
+      return res.status(500).json({ success: false, message: 'Error al verificar usuario' });
+    }
+    if (!usr || usr.deleted_at) {
+      return res.status(403).json({ success: false, message: 'Cuenta eliminada. No es posible restablecer contraseña.' });
+    }
+    if (usr.bloqueado) {
+      return res.status(403).json({ success: false, message: 'Cuenta bloqueada. Contacta al administrador.' });
     }
 
     // Actualizar la contraseña usando la API de administrador de Supabase

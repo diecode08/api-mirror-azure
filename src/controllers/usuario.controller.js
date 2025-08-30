@@ -89,7 +89,7 @@ const getUsuarioById = async (req, res) => {
 const updateUsuario = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, apellido, telefono } = req.body;
+    const { nombre, apellido, telefono, rol } = req.body;
     
     // Verificar si el usuario existe
     const existingUser = await Usuario.getById(id);
@@ -99,12 +99,37 @@ const updateUsuario = async (req, res) => {
         message: 'Usuario no encontrado'
       });
     }
+    if (existingUser.deleted_at) {
+      return res.status(400).json({ success: false, message: 'No se puede actualizar un usuario eliminado' });
+    }
     
     // Actualizar usuario
     const userData = {};
     if (nombre) userData.nombre = nombre;
     if (apellido) userData.apellido = apellido;
     if (telefono) userData.telefono = telefono;
+
+    // Manejar cambio de rol con permisos
+    if (rol) {
+      const allowedRoles = ['admin_general','admin_parking','empleado','cliente'];
+      if (!allowedRoles.includes(rol)) {
+        return res.status(400).json({ success: false, message: 'Rol inválido' });
+      }
+      // Verificar rol del solicitante
+      const requesterId = req.user.id;
+      const { data: requester, error: reqErr } = await supabase
+        .from('usuario')
+        .select('rol')
+        .eq('id_usuario', requesterId)
+        .single();
+      if (reqErr) {
+        return res.status(500).json({ success: false, message: 'Error al verificar permisos' });
+      }
+      if (!requester || requester.rol !== 'admin_general') {
+        return res.status(403).json({ success: false, message: 'Solo admin_general puede cambiar roles' });
+      }
+      userData.rol = rol;
+    }
     
     const updatedUser = await Usuario.update(id, userData);
     
