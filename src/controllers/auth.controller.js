@@ -81,7 +81,26 @@ const register = async (req, res) => {
       rol
     };
 
-    const nuevoUsuario = await Usuario.create(userData);
+    let nuevoUsuario;
+    try {
+      nuevoUsuario = await Usuario.create(userData);
+    } catch (dbErr) {
+      console.error('Fallo al insertar en tabla usuario:', dbErr);
+      // Rollback: eliminar usuario creado en Supabase Auth para evitar orfandad
+      try {
+        const { error: delErr } = await supabase.auth.admin.deleteUser(authData.user.id);
+        if (delErr) {
+          console.warn('No se pudo eliminar usuario en Auth tras fallo DB:', delErr.message);
+        }
+      } catch (e) {
+        console.warn('Excepción al eliminar usuario en Auth tras fallo DB:', e.message);
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'No se pudo registrar el usuario en la base de datos',
+        error: process.env.NODE_ENV === 'development' ? (dbErr.message || dbErr) : {}
+      });
+    }
 
     // Si el rol es admin_parking o empleado y se envían parking_ids, crear asignaciones en usuario_parking
     let parkings = [];

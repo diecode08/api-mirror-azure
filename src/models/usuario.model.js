@@ -26,7 +26,13 @@ class Usuario {
       .eq('id_usuario', id)
       .single();
     
-    if (error) throw error;
+    // Si no hay filas, Supabase devuelve PGRST116 con .single()
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw error;
+    }
     return data;
   }
 
