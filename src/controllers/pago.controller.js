@@ -109,7 +109,7 @@ const createPago = async (req, res) => {
     }
     
     // Verificar si el usuario es el propietario de la ocupación o un administrador
-    if (ocupacion.usuario_id !== userId && req.user.rol !== 'admin') {
+    if (ocupacion.usuario_id !== userId && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para crear un pago para esta ocupación'
@@ -182,7 +182,7 @@ const updatePago = async (req, res) => {
     }
     
     // Verificar si el usuario es el propietario de la ocupación o un administrador
-    if (ocupacion.usuario_id !== userId && req.user.rol !== 'admin') {
+    if (ocupacion.usuario_id !== userId && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para actualizar este pago'
@@ -248,7 +248,7 @@ const updateEstadoPago = async (req, res) => {
     }
     
     // Solo administradores pueden cambiar el estado a completado o rechazado
-    if ((estado === 'completado' || estado === 'rechazado') && req.user.rol !== 'admin') {
+    if ((estado === 'completado' || estado === 'rechazado') && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'Solo los administradores pueden marcar un pago como completado o rechazado'
@@ -305,7 +305,7 @@ const deletePago = async (req, res) => {
     }
     
     // Solo administradores pueden eliminar pagos
-    if (req.user.rol !== 'admin') {
+    if (req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'Solo los administradores pueden eliminar pagos'

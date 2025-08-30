@@ -189,7 +189,7 @@ const updateParking = async (req, res) => {
     }
     
     // Verificar si el usuario es administrador del parking
-    if (existingParking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (existingParking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para modificar este parking'
@@ -270,7 +270,7 @@ const deleteParking = async (req, res) => {
     }
     
     // Verificar si el usuario es administrador del parking
-    if (existingParking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (existingParking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar este parking'

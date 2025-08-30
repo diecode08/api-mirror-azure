@@ -7,7 +7,7 @@ class Parking {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Parking')
+      .from('parking')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class Parking {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Parking')
+      .from('parking')
       .select('*')
       .eq('id_parking', id)
       .single();
@@ -37,7 +37,7 @@ class Parking {
    */
   static async getByAdminId(adminId) {
     const { data, error } = await supabase
-      .from('Parking')
+      .from('parking')
       .select('*')
       .eq('id_admin', adminId);
     
@@ -52,7 +52,7 @@ class Parking {
    */
   static async create(parkingData) {
     const { data, error } = await supabase
-      .from('Parking')
+      .from('parking')
       .insert([parkingData])
       .select();
     
@@ -68,7 +68,7 @@ class Parking {
    */
   static async update(id, parkingData) {
     const { data, error } = await supabase
-      .from('Parking')
+      .from('parking')
       .update(parkingData)
       .eq('id_parking', id)
       .select();
@@ -84,7 +84,7 @@ class Parking {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('Parking')
+      .from('parking')
       .delete()
       .eq('id_parking', id);
     

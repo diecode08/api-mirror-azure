@@ -150,7 +150,7 @@ const createEspacio = async (req, res) => {
     }
     
     // Verificar si el usuario es administrador del parking
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para crear espacios en este parking'
@@ -217,7 +217,7 @@ const updateEspacio = async (req, res) => {
     
     // Verificar si el usuario es administrador del parking
     const parking = await Parking.getById(existingEspacio.id_parking);
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para modificar este espacio'
@@ -275,7 +275,7 @@ const updateEstadoEspacio = async (req, res) => {
     
     // Verificar si el usuario es administrador del parking
     const parking = await Parking.getById(existingEspacio.id_parking);
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para modificar este espacio'
@@ -320,7 +320,7 @@ const deleteEspacio = async (req, res) => {
     
     // Verificar si el usuario es administrador del parking
     const parking = await Parking.getById(existingEspacio.id_parking);
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar este espacio'

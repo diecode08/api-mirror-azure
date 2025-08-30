@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const supabase = require('../config/supabase');
+const { createClient } = require('@supabase/supabase-js');
 const Usuario = require('../models/usuario.model');
+const UsuarioParking = require('../models/usuario_parking.model');
 require('dotenv').config();
 
 /**
@@ -11,7 +13,7 @@ require('dotenv').config();
  */
 const register = async (req, res) => {
   try {
-    const { email, password, nombre, apellido, telefono, rol = 'cliente' } = req.body;
+    const { email, password, nombre, apellido, telefono, rol = 'cliente', parking_ids } = req.body;
 
     // Validar datos requeridos
     if (!email || !password || !nombre || !apellido) {
@@ -81,9 +83,30 @@ const register = async (req, res) => {
 
     const nuevoUsuario = await Usuario.create(userData);
 
+    // Si el rol es admin_parking o empleado y se envían parking_ids, crear asignaciones en usuario_parking
+    let parkings = [];
+    if ((rol === 'admin_parking' || rol === 'empleado') && Array.isArray(parking_ids) && parking_ids.length > 0) {
+      const assignments = parking_ids.map((pid) => ({ id_parking: pid, rol_en_parking: rol }));
+      await UsuarioParking.addBulk(authData.user.id, assignments);
+      parkings = parking_ids;
+    }
+
+    // Actualizar app_metadata en Supabase Auth (role y parkings)
+    try {
+      const { data: _upd, error: updErr } = await supabase.auth.admin.updateUserById(authData.user.id, {
+        app_metadata: { role: rol, parkings }
+      });
+      if (updErr) {
+        // Log, pero no bloquear registro
+        console.warn('No se pudo actualizar app_metadata:', updErr.message);
+      }
+    } catch (e) {
+      console.warn('Excepción al actualizar app_metadata:', e.message);
+    }
+
     // Generar token JWT
     const token = jwt.sign(
-      { id: authData.user.id, email: authData.user.email, rol },
+      { id: authData.user.id, email: authData.user.email, rol, parkings },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -145,6 +168,12 @@ const login = async (req, res) => {
 
     // Obtener datos del usuario
     const usuario = await Usuario.getById(authData.user.id);
+    let parkings = [];
+    try {
+      parkings = await UsuarioParking.getParkingIdsByUser(authData.user.id);
+    } catch (e) {
+      parkings = [];
+    }
 
     if (!usuario) {
       return res.status(404).json({
@@ -153,9 +182,21 @@ const login = async (req, res) => {
       });
     }
 
+    // Sincronizar app_metadata en login (role y parkings)
+    try {
+      const { error: updErr } = await supabase.auth.admin.updateUserById(usuario.id_usuario, {
+        app_metadata: { role: usuario.rol, parkings }
+      });
+      if (updErr) {
+        console.warn('No se pudo sincronizar app_metadata en login:', updErr.message);
+      }
+    } catch (e) {
+      console.warn('Excepción al sincronizar app_metadata en login:', e.message);
+    }
+
     // Generar token JWT
     const token = jwt.sign(
-      { id: usuario.id_usuario, email: authData.user.email, rol: usuario.rol },
+      { id: usuario.id_usuario, email: authData.user.email, rol: usuario.rol, parkings },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -243,10 +284,7 @@ const updatePassword = async (req, res) => {
     }
 
     // Actualizar contraseña con Supabase Auth
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword
-    });
-
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
       return res.status(400).json({
         success: false,
@@ -255,15 +293,111 @@ const updatePassword = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Contraseña actualizada exitosamente'
     });
   } catch (error) {
     console.error('Error al actualizar contraseña:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Error al actualizar contraseña',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+* Enviar email de recuperación de contraseña (Supabase Auth)
+* Body: { email }
+*/
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'El correo electrónico es requerido'
+      });
+    }
+
+    const redirectTo = process.env.RESET_PASSWORD_REDIRECT_URL;
+    if (!redirectTo) {
+      return res.status(500).json({
+        success: false,
+        message: 'Falta configurar RESET_PASSWORD_REDIRECT_URL en el entorno'
+      });
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se pudo enviar el correo de recuperación',
+        error: process.env.NODE_ENV === 'development' ? error.message : {}
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Correo de recuperación enviado (si el email existe)'
+    });
+  } catch (error) {
+    console.error('Error en forgotPassword:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al solicitar recuperación de contraseña',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+* Restablecer contraseña usando access_token del enlace de Supabase
+* Body: { access_token, newPassword }
+*/
+const resetPassword = async (req, res) => {
+  try {
+    const { access_token, newPassword } = req.body;
+    if (!access_token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'access_token y newPassword son requeridos'
+      });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'Configuración de Supabase incompleta'
+      });
+    }
+
+    // Crear cliente autenticado con el access_token del enlace de reset
+    const sbWithToken = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: `Bearer ${access_token}` } }
+    });
+
+    const { error } = await sbWithToken.auth.updateUser({ password: newPassword });
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se pudo restablecer la contraseña',
+        error: process.env.NODE_ENV === 'development' ? error.message : {}
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Contraseña restablecida exitosamente'
+    });
+  } catch (error) {
+    console.error('Error en resetPassword:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al restablecer contraseña',
       error: process.env.NODE_ENV === 'development' ? error.message : {}
     });
   }
@@ -273,5 +407,7 @@ module.exports = {
   register,
   login,
   getProfile,
-  updatePassword
+  updatePassword,
+  forgotPassword,
+  resetPassword
 };

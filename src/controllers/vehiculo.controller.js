@@ -150,8 +150,8 @@ const updateVehiculo = async (req, res) => {
       });
     }
     
-    // Verificar si el usuario es propietario del vehículo
-    if (existingVehiculo.id_usuario !== req.user.id && req.user.rol !== 'admin') {
+    // Verificar si el usuario es propietario del vehículo o administrador
+    if (existingVehiculo.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para modificar este vehículo'
@@ -199,8 +199,8 @@ const deleteVehiculo = async (req, res) => {
       });
     }
     
-    // Verificar si el usuario es propietario del vehículo
-    if (existingVehiculo.id_usuario !== req.user.id && req.user.rol !== 'admin') {
+    // Verificar si el usuario es propietario del vehículo o administrador
+    if (existingVehiculo.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar este vehículo'

@@ -55,7 +55,7 @@ $registerAdminBody = @{
     nombre = "Usuario"
     apellido = "Admin"
     telefono = "0987654321"
-    rol = "admin"
+    rol = "admin_general"
 } | ConvertTo-Json
 
 try {

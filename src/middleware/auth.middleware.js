@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
+const UsuarioParking = require('../models/usuario_parking.model');
 require('dotenv').config();
 
 /**
@@ -38,6 +39,50 @@ const verifyToken = (req, res, next) => {
 };
 
 /**
+ * Middleware para verificar rol por parking asignado (multiparking)
+ * @param {string} paramName - Nombre del parámetro que contiene el ID del parking
+ * @param {string|Array} allowedRoles - Roles permitidos en el parking ('admin_parking','empleado')
+ */
+const hasParkingRole = (paramName = 'id_parking', allowedRoles = ['admin_parking','empleado']) => {
+  return async (req, res, next) => {
+    try {
+      const userId = req.user.id;
+      const parkingId = parseInt(req.params[paramName] ?? req.body[paramName], 10);
+
+      if (!Number.isInteger(parkingId)) {
+        return res.status(400).json({ success: false, message: 'Parámetro id_parking inválido' });
+      }
+
+      // admin_general pasa directo
+      const { data: usuario, error: usrErr } = await supabase
+        .from('usuario')
+        .select('rol')
+        .eq('id_usuario', userId)
+        .single();
+      if (usrErr) {
+        return res.status(500).json({ success: false, message: 'Error al verificar rol del usuario' });
+      }
+      if (usuario && usuario.rol === 'admin_general') {
+        return next();
+      }
+
+      const ok = await UsuarioParking.hasRole(userId, parkingId, allowedRoles);
+      if (!ok) {
+        return res.status(403).json({ success: false, message: 'No tiene permisos para este parking' });
+      }
+
+      next();
+    } catch (error) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Error al verificar permisos',
+        error: process.env.NODE_ENV === 'development' ? error.message : {}
+      });
+    }
+  };
+};
+
+/**
  * Middleware para verificar si el usuario tiene el rol requerido
  * @param {string|Array} roles - Rol o roles permitidos
  * @returns {Function} Middleware
@@ -62,8 +107,12 @@ const hasRole = (roles) => {
         });
       }
       
-      // Verificar si el usuario tiene el rol requerido
+      // Jerarquía: admin_general tiene acceso total
       const rolesArray = Array.isArray(roles) ? roles : [roles];
+      if (usuario && usuario.rol === 'admin_general') {
+        return next();
+      }
+      // Verificar si el usuario tiene el rol requerido
       if (!usuario || !rolesArray.includes(usuario.rol)) {
         return res.status(403).json({ 
           success: false, 
@@ -179,11 +228,21 @@ const isParkingAdmin = (paramName = 'id') => {
         });
       }
       
-      if (!data || data.id_admin !== userId) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'No tiene permisos para administrar este parking' 
-        });
+      // admin_general pasa
+      const { data: usuario } = await supabase
+        .from('usuario')
+        .select('rol')
+        .eq('id_usuario', userId)
+        .single();
+
+      if (usuario && usuario.rol === 'admin_general') return next();
+
+      // admin en pivote o id_admin del parking
+      const esAdminPivote = await UsuarioParking.hasRole(userId, parseInt(parkingId, 10), 'admin_parking');
+      const esAdminDirecto = data && data.id_admin === userId;
+
+      if (!esAdminPivote && !esAdminDirecto) {
+        return res.status(403).json({ success: false, message: 'No tiene permisos para administrar este parking' });
       }
       
       next();
@@ -200,6 +259,7 @@ const isParkingAdmin = (paramName = 'id') => {
 module.exports = {
   verifyToken,
   hasRole,
+  hasParkingRole,
   isOwner,
   isParkingAdmin
 };

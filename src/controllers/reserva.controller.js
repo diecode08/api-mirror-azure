@@ -290,7 +290,7 @@ const updateReserva = async (req, res) => {
     }
     
     // Verificar si el usuario es propietario de la reserva
-    if (existingReserva.id_usuario !== req.user.id && req.user.rol !== 'admin') {
+    if (existingReserva.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para modificar esta reserva'
@@ -422,7 +422,7 @@ const updateEstadoReserva = async (req, res) => {
     const espacio = await Espacio.getById(existingReserva.id_espacio);
     const parking = await Parking.getById(espacio.id_parking);
     
-    if (existingReserva.id_usuario !== req.user.id && parking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (existingReserva.id_usuario !== req.user.id && parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para modificar esta reserva'
@@ -509,7 +509,7 @@ const deleteReserva = async (req, res) => {
     }
     
     // Verificar si el usuario es propietario de la reserva o administrador
-    if (existingReserva.id_usuario !== req.user.id && req.user.rol !== 'admin') {
+    if (existingReserva.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar esta reserva'

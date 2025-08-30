@@ -195,7 +195,7 @@ const createOcupacion = async (req, res) => {
       });
     }
     
-    if (vehiculo.id_usuario !== id_usuario && req.user.rol !== 'admin' && req.user.rol !== 'parking_admin') {
+    if (vehiculo.id_usuario !== id_usuario && req.user.rol !== 'admin_general' && req.user.rol !== 'admin_parking') {
       return res.status(403).json({
         success: false,
         message: 'El vehículo no pertenece al usuario'
@@ -323,7 +323,7 @@ const registrarSalida = async (req, res) => {
     const espacio = await Espacio.getById(existingOcupacion.id_espacio);
     const parking = await Parking.getById(espacio.id_parking);
     
-    if (existingOcupacion.id_usuario !== req.user.id && parking.id_admin !== req.user.id && req.user.rol !== 'admin') {
+    if (existingOcupacion.id_usuario !== req.user.id && parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para registrar la salida de esta ocupación'
@@ -393,7 +393,7 @@ const deleteOcupacion = async (req, res) => {
     }
     
     // Solo los administradores pueden eliminar ocupaciones
-    if (req.user.rol !== 'admin') {
+    if (req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar ocupaciones'

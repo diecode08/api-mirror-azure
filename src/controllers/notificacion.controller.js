@@ -8,7 +8,7 @@ const Notificacion = require('../models/notificacion.model');
 const getAllNotificaciones = async (req, res) => {
   try {
     // Solo los administradores pueden ver todas las notificaciones
-    if (req.user.rol !== 'admin') {
+    if (req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para ver todas las notificaciones'
@@ -49,7 +49,7 @@ const getNotificacionById = async (req, res) => {
     }
     
     // Verificar si el usuario es el propietario de la notificación o un administrador
-    if (notificacion.usuario_id !== req.user.id && req.user.rol !== 'admin') {
+    if (notificacion.usuario_id !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para ver esta notificación'
@@ -80,7 +80,7 @@ const getNotificacionesByUserId = async (req, res) => {
     const { userId } = req.params;
     
     // Verificar si el usuario es el propietario de las notificaciones o un administrador
-    if (userId !== req.user.id && req.user.rol !== 'admin') {
+    if (userId !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para ver estas notificaciones'
@@ -113,7 +113,7 @@ const getNotificacionesNoLeidasByUserId = async (req, res) => {
     const { userId } = req.params;
     
     // Verificar si el usuario es el propietario de las notificaciones o un administrador
-    if (userId !== req.user.id && req.user.rol !== 'admin') {
+    if (userId !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para ver estas notificaciones'
@@ -144,7 +144,7 @@ const getNotificacionesNoLeidasByUserId = async (req, res) => {
 const createNotificacion = async (req, res) => {
   try {
     // Solo los administradores pueden crear notificaciones manualmente
-    if (req.user.rol !== 'admin') {
+    if (req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para crear notificaciones'
@@ -284,7 +284,7 @@ const deleteNotificacion = async (req, res) => {
     }
     
     // Verificar si el usuario es el propietario de la notificación o un administrador
-    if (notificacion.usuario_id !== req.user.id && req.user.rol !== 'admin') {
+    if (notificacion.usuario_id !== req.user.id && req.user.rol !== 'admin_general') {
       return res.status(403).json({
         success: false,
         message: 'No tienes permiso para eliminar esta notificación'

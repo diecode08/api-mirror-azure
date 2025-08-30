@@ -63,7 +63,7 @@ REGISTER_ADMIN_RESPONSE=$(curl -s -X POST "$API_URL/auth/register" \
     "nombre": "Usuario",
     "apellido": "Admin",
     "telefono": "0987654321",
-    "rol": "admin"
+    "rol": "admin_general"
   }')
 
 echo "Respuesta del servidor:"

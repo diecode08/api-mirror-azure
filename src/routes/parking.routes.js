@@ -10,7 +10,7 @@ router.get('/:id', parkingController.getParkingById);
 
 // Rutas protegidas por autenticación
 router.get('/admin/:adminId', verifyToken, parkingController.getParkingsByAdminId);
-router.post('/', verifyToken, hasRole(['admin', 'parking_admin']), parkingController.createParking);
+router.post('/', verifyToken, hasRole(['admin_general']), parkingController.createParking);
 router.put('/:id', verifyToken, isParkingAdmin, parkingController.updateParking);
 router.delete('/:id', verifyToken, isParkingAdmin, parkingController.deleteParking);
 

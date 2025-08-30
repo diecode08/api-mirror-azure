@@ -10,6 +10,6 @@ router.get('/ocupacion/:ocupacionId', verifyToken, pagoController.getPagosByOcup
 router.post('/', verifyToken, pagoController.createPago);
 router.put('/:id', verifyToken, pagoController.updatePago);
 router.patch('/:id/estado', verifyToken, pagoController.updateEstadoPago);
-router.delete('/:id', verifyToken, hasRole(['admin']), pagoController.deletePago);
+router.delete('/:id', verifyToken, hasRole(['admin_general']), pagoController.deletePago);
 
 module.exports = router;
