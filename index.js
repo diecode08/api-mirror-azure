@@ -35,6 +35,8 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
+// Soportar ambas variantes: singular y plural
+app.use('/api/parking', parkingRoutes);
 app.use('/api/parkings', parkingRoutes);
 app.use('/api/espacios', espacioRoutes);
 app.use('/api/reservas', reservaRoutes);

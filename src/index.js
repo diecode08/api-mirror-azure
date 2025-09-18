@@ -43,6 +43,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/parking', parkingRoutes);
+// Alias para compatibilidad: algunas implementaciones usan /api/parkings
+app.use('/api/parkings', parkingRoutes);
 app.use('/api/espacios', espacioRoutes);
 app.use('/api/reservas', reservaRoutes);
 app.use('/api/ocupaciones', ocupacionRoutes);
