@@ -1,3 +1,4 @@
+
 const supabase = require('../config/supabase');
 
 class Espacio {
@@ -7,7 +8,7 @@ class Espacio {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +22,7 @@ class Espacio {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .select('*')
       .eq('id_espacio', id)
       .single();
@@ -37,7 +38,7 @@ class Espacio {
    */
   static async getByParkingId(parkingId) {
     const { data, error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .select('*')
       .eq('id_parking', parkingId);
     
@@ -52,7 +53,7 @@ class Espacio {
    */
   static async getAvailableByParkingId(parkingId) {
     const { data, error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .select('*')
       .eq('id_parking', parkingId)
       .eq('estado', 'disponible');
@@ -68,7 +69,7 @@ class Espacio {
    */
   static async create(espacioData) {
     const { data, error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .insert([espacioData])
       .select();
     
@@ -84,7 +85,7 @@ class Espacio {
    */
   static async update(id, espacioData) {
     const { data, error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .update(espacioData)
       .eq('id_espacio', id)
       .select();
@@ -110,7 +111,7 @@ class Espacio {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('Espacio')
+      .from('espacio')
       .delete()
       .eq('id_espacio', id);
     

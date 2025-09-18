@@ -5,6 +5,10 @@ const { verifyToken, hasRole, hasParkingRole } = require('../middleware/auth.mid
 
 // Rutas protegidas por autenticación
 router.get('/', verifyToken, hasRole(['admin_general']), usuarioController.getAllUsuarios);
+router.get('/empleados/scoped', verifyToken, usuarioController.getScopedEmployees);
+router.post('/empleados', verifyToken, hasRole(['admin_general']), usuarioController.createEmpleado);
+router.delete('/empleados/:id', verifyToken, hasRole(['admin_general']), usuarioController.deleteEmpleado);
+router.get('/administradores-disponibles', verifyToken, hasRole(['admin_general']), usuarioController.getAdministradoresDisponibles);
 router.get('/rol/:rol', verifyToken, hasRole(['admin_general']), usuarioController.getUsuariosByRol);
 router.get('/:id', verifyToken, usuarioController.getUsuarioById);
 router.put('/:id', verifyToken, usuarioController.updateUsuario);

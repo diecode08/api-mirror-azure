@@ -22,13 +22,27 @@ const PORT = process.env.PORT || 3000;
 // Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(morgan('dev'));
+
+// Logger ligero de todas las requests (incluye OPTIONS) para depuración
+app.use((req, res, next) => {
+  try {
+    console.log(`[REQ] ${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
+  } catch (_) {}
+  next();
+});
+
+// Nota: Evitamos app.options('*', cors()) por incompatibilidad con path-to-regexp modernas
+
+// Activar logs detallados solo en desarrollo
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
 
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
-app.use('/api/parkings', parkingRoutes);
+app.use('/api/parking', parkingRoutes);
 app.use('/api/espacios', espacioRoutes);
 app.use('/api/reservas', reservaRoutes);
 app.use('/api/ocupaciones', ocupacionRoutes);

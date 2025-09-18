@@ -11,9 +11,11 @@ require('dotenv').config();
  */
 const verifyToken = (req, res, next) => {
   try {
+    console.log('[verifyToken] Inicio. Header Authorization presente:', !!req.headers.authorization);
     // Obtener el token del encabezado de autorización
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn('[verifyToken] Token ausente o mal formado');
       return res.status(401).json({ 
         success: false, 
         message: 'No se proporcionó token de autenticación' 
@@ -28,8 +30,10 @@ const verifyToken = (req, res, next) => {
     // Agregar el usuario decodificado a la solicitud
     req.user = decoded;
     
+    console.log('[verifyToken] OK. user.id:', req.user?.id, 'rol:', req.user?.rol);
     next();
   } catch (error) {
+    console.error('[verifyToken] Error:', error?.message);
     return res.status(401).json({ 
       success: false, 
       message: 'Token inválido o expirado',
@@ -220,6 +224,7 @@ const isParkingAdmin = (paramName = 'id') => {
     try {
       const userId = req.user.id;
       const parkingId = req.params[paramName];
+      console.log('[isParkingAdmin] userId:', userId, 'parkingId:', parkingId);
       
       // Verificar si el usuario es administrador del parking
       const { data, error } = await supabase
@@ -229,6 +234,7 @@ const isParkingAdmin = (paramName = 'id') => {
         .single();
       
       if (error) {
+        console.warn('[isParkingAdmin] Parking no encontrado. id:', parkingId, 'error:', error.message);
         return res.status(404).json({ 
           success: false, 
           message: 'Parking no encontrado',
@@ -243,18 +249,24 @@ const isParkingAdmin = (paramName = 'id') => {
         .eq('id_usuario', userId)
         .single();
 
-      if (usuario && usuario.rol === 'admin_general') return next();
+      if (usuario && usuario.rol === 'admin_general') {
+        console.log('[isParkingAdmin] Bypass por admin_general');
+        return next();
+      }
 
       // admin en pivote o id_admin del parking
       const esAdminPivote = await UsuarioParking.hasRole(userId, parseInt(parkingId, 10), 'admin_parking');
       const esAdminDirecto = data && data.id_admin === userId;
 
+      console.log('[isParkingAdmin] esAdminPivote:', esAdminPivote, 'esAdminDirecto:', esAdminDirecto);
       if (!esAdminPivote && !esAdminDirecto) {
         return res.status(403).json({ success: false, message: 'No tiene permisos para administrar este parking' });
       }
       
+      console.log('[isParkingAdmin] OK permisos');
       next();
     } catch (error) {
+      console.error('[isParkingAdmin] Error:', error?.message);
       return res.status(500).json({ 
         success: false, 
         message: 'Error al verificar permisos',

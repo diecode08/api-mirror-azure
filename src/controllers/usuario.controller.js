@@ -103,6 +103,37 @@ const updateUsuario = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No se puede actualizar un usuario eliminado' });
     }
     
+    // Permisos por alcance: si el solicitante es admin_parking, solo puede editar empleados que pertenezcan a al menos uno de sus parkings
+    const requesterId = req.user.id;
+    const { data: requester, error: reqErr } = await supabase
+      .from('usuario')
+      .select('rol')
+      .eq('id_usuario', requesterId)
+      .single();
+    if (reqErr) {
+      return res.status(500).json({ success: false, message: 'Error al verificar permisos' });
+    }
+
+    if (requester && requester.rol === 'admin_parking') {
+      // Solo puede editar usuarios con rol 'empleado' y con intersección de parkings
+      if (existingUser.rol !== 'empleado') {
+        return res.status(403).json({ success: false, message: 'Solo puede editar empleados' });
+      }
+
+      // Obtener parkings del solicitante
+      const myParkingIds = await UsuarioParking.getParkingIdsByUser(requesterId);
+      if (!Array.isArray(myParkingIds) || myParkingIds.length === 0) {
+        return res.status(403).json({ success: false, message: 'Sin parkings asignados para operar' });
+      }
+      // Obtener parkings del usuario objetivo
+      const targetAssignments = await UsuarioParking.getByUser(id);
+      const targetParkingIds = (targetAssignments || []).map(a => a.id_parking);
+      const overlap = targetParkingIds.some(pid => myParkingIds.includes(pid));
+      if (!overlap) {
+        return res.status(403).json({ success: false, message: 'El empleado no pertenece a sus parkings' });
+      }
+    }
+
     // Actualizar usuario
     const userData = {};
     if (nombre) userData.nombre = nombre;
@@ -114,16 +145,6 @@ const updateUsuario = async (req, res) => {
       const allowedRoles = ['admin_general','admin_parking','empleado','cliente'];
       if (!allowedRoles.includes(rol)) {
         return res.status(400).json({ success: false, message: 'Rol inválido' });
-      }
-      // Verificar rol del solicitante
-      const requesterId = req.user.id;
-      const { data: requester, error: reqErr } = await supabase
-        .from('usuario')
-        .select('rol')
-        .eq('id_usuario', requesterId)
-        .single();
-      if (reqErr) {
-        return res.status(500).json({ success: false, message: 'Error al verificar permisos' });
       }
       if (!requester || requester.rol !== 'admin_general') {
         return res.status(403).json({ success: false, message: 'Solo admin_general puede cambiar roles' });
@@ -333,6 +354,231 @@ async function removeParkingFromUser(req, res) {
   }
 }
 
+/**
+ * Obtener parkings asignados al usuario actual
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getMyParkingAssignments = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Obtener asignaciones de parking del usuario actual
+    const assignments = await UsuarioParking.getByUser(userId);
+    
+    res.status(200).json({
+      success: true,
+      data: assignments
+    });
+  } catch (error) {
+    console.error('Error al obtener asignaciones de parking del usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener asignaciones de parking',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Obtener administradores disponibles para asignar a parkings
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getAdministradoresDisponibles = async (req, res) => {
+  try {
+    const { data: administradores, error } = await supabase
+      .from('usuario')
+      .select('id_usuario, nombre, apellido, email, telefono, rol')
+      .in('rol', ['admin_general', 'admin_parking'])
+      .eq('bloqueado', false)
+      .is('deleted_at', null)
+      .order('nombre', { ascending: true });
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: administradores
+    });
+  } catch (error) {
+    console.error('Error al obtener administradores disponibles:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener administradores disponibles',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Listar empleados con alcance por rol del solicitante.
+ * - admin_general: todos los empleados
+ * - admin_parking: solo empleados asignados a al menos uno de sus parkings
+ */
+const getScopedEmployees = async (req, res) => {
+  try {
+    const requesterId = req.user.id;
+    const { data: requester, error } = await supabase
+      .from('usuario')
+      .select('rol')
+      .eq('id_usuario', requesterId)
+      .single();
+    if (error) throw error;
+
+    const attachParkings = async (users) => {
+      const ids = users.map(u => u.id_usuario);
+      if (ids.length === 0) return users;
+      const { data: asignaciones, error: asgErr } = await supabase
+        .from('usuario_parking')
+        .select('id_usuario, id_parking, rol_en_parking')
+        .in('id_usuario', ids)
+        .eq('rol_en_parking', 'empleado');
+      if (asgErr) throw asgErr;
+      const parkingIds = Array.from(new Set((asignaciones || []).map(a => a.id_parking)));
+      let parkingById = {};
+      if (parkingIds.length > 0) {
+        const { data: parks, error: pkErr } = await supabase
+          .from('parking')
+          .select('id_parking, nombre')
+          .in('id_parking', parkingIds);
+        if (pkErr) throw pkErr;
+        parkingById = (parks || []).reduce((acc, p) => { acc[p.id_parking] = p.nombre; return acc; }, {});
+      }
+      const assignmentsByUser = new Map();
+      (asignaciones || []).forEach(a => {
+        const arr = assignmentsByUser.get(a.id_usuario) || [];
+        arr.push({ id_parking: a.id_parking, rol_en_parking: a.rol_en_parking, nombre: parkingById[a.id_parking] });
+        assignmentsByUser.set(a.id_usuario, arr);
+      });
+      return users.map(u => ({ ...u, parkings: assignmentsByUser.get(u.id_usuario) || [] }));
+    };
+
+    if (requester.rol === 'admin_general') {
+      const empleados = await Usuario.findByRol('empleado');
+      const withPks = await attachParkings(empleados || []);
+      return res.status(200).json({ success: true, data: withPks });
+    }
+
+    if (requester.rol === 'admin_parking') {
+      // Parkings del solicitante
+      const myParkingIds = await UsuarioParking.getParkingIdsByUser(requesterId);
+      if (!Array.isArray(myParkingIds) || myParkingIds.length === 0) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+      // Obtener asignaciones de esos parkings
+      const { data: asignaciones, error: asgErr } = await supabase
+        .from('usuario_parking')
+        .select('id_usuario, id_parking, rol_en_parking')
+        .in('id_parking', myParkingIds)
+        .eq('rol_en_parking', 'empleado');
+      if (asgErr) throw asgErr;
+
+      const empleadoIds = Array.from(new Set((asignaciones || []).map(a => a.id_usuario)));
+      if (empleadoIds.length === 0) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+      // Traer datos de usuarios empleados
+      const { data: empleados, error: empErr } = await supabase
+        .from('usuario')
+        .select('*')
+        .in('id_usuario', empleadoIds)
+        .eq('rol', 'empleado');
+      if (empErr) throw empErr;
+
+      // Adjuntar nombres de parkings
+      const parkingIds = Array.from(new Set((asignaciones || []).map(a => a.id_parking)));
+      let parkingById = {};
+      if (parkingIds.length > 0) {
+        const { data: parks, error: pkErr } = await supabase
+          .from('parking')
+          .select('id_parking, nombre')
+          .in('id_parking', parkingIds);
+        if (pkErr) throw pkErr;
+        parkingById = (parks || []).reduce((acc, p) => { acc[p.id_parking] = p.nombre; return acc; }, {});
+      }
+      const assignmentsByUser = new Map();
+      (asignaciones || []).forEach(a => {
+        const arr = assignmentsByUser.get(a.id_usuario) || [];
+        arr.push({ id_parking: a.id_parking, rol_en_parking: a.rol_en_parking, nombre: parkingById[a.id_parking] });
+        assignmentsByUser.set(a.id_usuario, arr);
+      });
+      const withPks = (empleados || []).map(u => ({ ...u, parkings: assignmentsByUser.get(u.id_usuario) || [] }));
+      return res.status(200).json({ success: true, data: withPks });
+    }
+
+    return res.status(403).json({ success: false, message: 'Sin permisos' });
+  } catch (e) {
+    console.error('Error en getScopedEmployees:', e);
+    return res.status(500).json({ success: false, message: 'Error al obtener empleados' });
+  }
+};
+
+/**
+ * Crear empleado (solo admin_general). Crea usuario con rol 'empleado' y asignaciones opcionales
+ * Body: { nombre, apellido, email, telefono?, parking_ids?: number[] }
+ */
+const createEmpleado = async (req, res) => {
+  try {
+    const requesterId = req.user.id;
+    const { data: requester, error } = await supabase
+      .from('usuario')
+      .select('rol')
+      .eq('id_usuario', requesterId)
+      .single();
+    if (error) throw error;
+    if (!requester || requester.rol !== 'admin_general') {
+      return res.status(403).json({ success: false, message: 'Solo admin_general puede crear empleados' });
+    }
+
+    const { nombre, apellido, email, telefono, parking_ids } = req.body || {};
+    if (!nombre || !apellido || !email) {
+      return res.status(400).json({ success: false, message: 'nombre, apellido y email son requeridos' });
+    }
+
+    // Generar contraseña temporal
+    const tempPassword = 'ChangeMe123!';
+
+    // Reutilizar flujo de registro en Auth
+    const authController = require('./auth.controller');
+    req.body = { nombre, apellido, email, telefono, password: tempPassword, rol: 'empleado', parking_ids };
+    return authController.register(req, res);
+  } catch (e) {
+    console.error('Error al crear empleado:', e);
+    return res.status(500).json({ success: false, message: 'Error al crear empleado' });
+  }
+};
+
+/**
+ * Eliminar (baja lógica) un empleado (solo admin_general)
+ */
+const deleteEmpleado = async (req, res) => {
+  try {
+    const requesterId = req.user.id;
+    const { data: requester } = await supabase
+      .from('usuario')
+      .select('rol')
+      .eq('id_usuario', requesterId)
+      .single();
+    if (!requester || requester.rol !== 'admin_general') {
+      return res.status(403).json({ success: false, message: 'Solo admin_general puede eliminar empleados' });
+    }
+    const { id } = req.params;
+    // Verificar que el usuario objetivo sea empleado
+    const target = await Usuario.getById(id);
+    if (!target) return res.status(404).json({ success: false, message: 'Empleado no encontrado' });
+    if (target.rol !== 'empleado') return res.status(400).json({ success: false, message: 'El usuario no es empleado' });
+
+    await Usuario.softDelete(id, { deleted_by: requesterId, bloquear: true, motivo_baja: 'Baja por admin' });
+    return res.status(200).json({ success: true, message: 'Empleado dado de baja' });
+  } catch (e) {
+    console.error('Error al eliminar empleado:', e);
+    return res.status(500).json({ success: false, message: 'Error al eliminar empleado' });
+  }
+};
+
 module.exports = {
   getAllUsuarios,
   getUsuarioById,
@@ -342,5 +588,10 @@ module.exports = {
   getUserParkings,
   assignParkingsToUser,
   removeParkingFromUser,
-  toggleBloqueoUsuario
+  toggleBloqueoUsuario,
+  getMyParkingAssignments,
+  getAdministradoresDisponibles,
+  getScopedEmployees,
+  createEmpleado,
+  deleteEmpleado
 };
