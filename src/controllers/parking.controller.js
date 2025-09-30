@@ -16,10 +16,30 @@ const getAllParkings = async (req, res) => {
     if (process.env.NODE_ENV === 'development') {
       console.log('Parkings obtenidos:', parkings);
     }
+
+    // Enriquecer con nombre del administrador (admin_nombre)
+    let enriched = parkings;
+    try {
+      const adminIds = [...new Set((parkings || []).map(p => p.id_admin).filter(Boolean))];
+      if (adminIds.length > 0) {
+        const { data: adminsData, error: adminsErr } = await supabase
+          .from('usuario')
+          .select('id_usuario, nombre, apellido')
+          .in('id_usuario', adminIds);
+        if (adminsErr) {
+          console.warn('[getAllParkings] No se pudo obtener nombres de admins:', adminsErr?.message);
+        } else {
+          const byId = Object.fromEntries((adminsData || []).map(u => [u.id_usuario, `${u.nombre ?? ''} ${u.apellido ?? ''}`.trim()]));
+          enriched = parkings.map(p => ({ ...p, admin_nombre: byId[p.id_admin] || null }));
+        }
+      }
+    } catch (innerErr) {
+      console.warn('[getAllParkings] Error enriqueciendo admin_nombre:', innerErr?.message);
+    }
     
     res.status(200).json({
       success: true,
-      data: parkings
+      data: enriched
     });
   } catch (error) {
     console.error('Error detallado al obtener parkings:', error);
@@ -347,9 +367,12 @@ const deleteParking = async (req, res) => {
   try {
     const { id } = req.params;
     const { motivo } = req.body || {};
+    console.log('=== INICIO DELETE (SOFT) PARKING ===');
+    console.log('[deleteParking] user.id:', req.user?.id, 'user.rol:', req.user?.rol, 'params.id:', id, 'motivo:', motivo);
     
     // Verificar si el parking existe
     const existingParking = await Parking.getById(id);
+    console.log('[deleteParking] existingParking:', existingParking ? { id_parking: existingParking.id_parking, id_admin: existingParking.id_admin } : null);
     if (!existingParking) {
       return res.status(404).json({
         success: false,
@@ -359,6 +382,7 @@ const deleteParking = async (req, res) => {
     
     // Verificar si el usuario es administrador del parking
     if (existingParking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
+      console.warn('[deleteParking] Permiso denegado. existing.id_admin:', existingParking.id_admin, 'user.id:', req.user.id, 'rol:', req.user.rol);
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar este parking'
@@ -367,20 +391,27 @@ const deleteParking = async (req, res) => {
     
     // Eliminado lógico (soft delete)
     const deletedBy = req.user?.id;
+    console.log('[deleteParking] Ejecutando softDelete con:', { id, deletedBy, motivo });
     const result = await Parking.softDelete(id, deletedBy, motivo);
+    console.log('[deleteParking] Resultado softDelete:', result ? { id_parking: result.id_parking, deleted_at: result.deleted_at, deleted_by: result.deleted_by, motivo_baja: result.motivo_baja } : null);
     
     res.status(200).json({
       success: true,
       message: 'Parking dado de baja exitosamente',
       data: result
     });
+    console.log('=== FIN DELETE (SOFT) PARKING (OK) ===');
   } catch (error) {
+    console.error('=== ERROR EN DELETE (SOFT) PARKING ===');
     console.error('Error al eliminar parking:', error);
+    console.error('Mensaje:', error?.message);
+    console.error('Stack:', error?.stack);
     res.status(500).json({
       success: false,
       message: 'Error al eliminar parking',
       error: process.env.NODE_ENV === 'development' ? error.message : {}
     });
+    console.error('=== FIN ERROR DELETE (SOFT) PARKING ===');
   }
 };
 

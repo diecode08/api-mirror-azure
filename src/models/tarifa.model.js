@@ -7,7 +7,7 @@ class Tarifa {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Tarifa')
+      .from('tarifa')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class Tarifa {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Tarifa')
+      .from('tarifa')
       .select('*')
       .eq('id_tarifa', id)
       .single();
@@ -37,7 +37,7 @@ class Tarifa {
    */
   static async getByParkingId(parkingId) {
     const { data, error } = await supabase
-      .from('Tarifa')
+      .from('tarifa')
       .select('*')
       .eq('id_parking', parkingId);
     
@@ -51,12 +51,25 @@ class Tarifa {
    * @returns {Promise<Object>} Tarifa creada
    */
   static async create(tarifaData) {
+    // Validar y convertir tipos de datos
+    const validatedData = {
+      id_parking: Number(tarifaData.id_parking),
+      tipo: String(tarifaData.tipo),
+      monto: Number(tarifaData.monto),
+      condiciones: tarifaData.condiciones || null
+    };
+    console.log('[tarifa.model][create] Datos validados:', validatedData);
+
     const { data, error } = await supabase
-      .from('Tarifa')
-      .insert([tarifaData])
+      .from('tarifa')
+      .insert([validatedData])
       .select();
-    
-    if (error) throw error;
+
+    if (error) {
+      console.error('[tarifa.model][create] Error de Supabase:', error);
+      throw error;
+    }
+    console.log('[tarifa.model][create] Tarifa creada:', data[0]);
     return data[0];
   }
 
@@ -67,13 +80,26 @@ class Tarifa {
    * @returns {Promise<Object>} Tarifa actualizada
    */
   static async update(id, tarifaData) {
+    // Validar y convertir tipos de datos solo para campos que se están actualizando
+    const validatedData = {};
+    if (tarifaData.id_parking !== undefined) validatedData.id_parking = Number(tarifaData.id_parking);
+    if (tarifaData.tipo !== undefined) validatedData.tipo = String(tarifaData.tipo);
+    if (tarifaData.monto !== undefined) validatedData.monto = Number(tarifaData.monto);
+    if (tarifaData.condiciones !== undefined) validatedData.condiciones = tarifaData.condiciones || null;
+
+    console.log('[tarifa.model][update] ID:', id, 'Datos validados:', validatedData);
+
     const { data, error } = await supabase
-      .from('Tarifa')
-      .update(tarifaData)
+      .from('tarifa')
+      .update(validatedData)
       .eq('id_tarifa', id)
       .select();
-    
-    if (error) throw error;
+
+    if (error) {
+      console.error('[tarifa.model][update] Error de Supabase:', error);
+      throw error;
+    }
+    console.log('[tarifa.model][update] Tarifa actualizada:', data[0]);
     return data[0];
   }
 
@@ -83,12 +109,17 @@ class Tarifa {
    * @returns {Promise<boolean>} Resultado de la operación
    */
   static async delete(id) {
+    console.log('[tarifa.model][delete] Eliminando tarifa ID:', id);
     const { error } = await supabase
-      .from('Tarifa')
+      .from('tarifa')
       .delete()
       .eq('id_tarifa', id);
-    
-    if (error) throw error;
+
+    if (error) {
+      console.error('[tarifa.model][delete] Error de Supabase:', error);
+      throw error;
+    }
+    console.log('[tarifa.model][delete] Tarifa eliminada exitosamente');
     return true;
   }
 
@@ -100,7 +131,7 @@ class Tarifa {
    */
   static async getByTipo(parkingId, tipo) {
     const { data, error } = await supabase
-      .from('Tarifa')
+      .from('tarifa')
       .select('*')
       .eq('id_parking', parkingId)
       .eq('tipo', tipo)

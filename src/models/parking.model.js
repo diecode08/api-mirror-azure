@@ -56,15 +56,27 @@ class Parking {
    * @returns {Promise<Object>} Datos del parking
    */
   static async getById(id) {
-    const { data, error } = await supabase
-      .from('parking')
-      .select('*')
-      .eq('id_parking', id)
-      .is('deleted_at', null)
-      .single();
-    
-    if (error) throw error;
-    return data;
+    console.log('[Parking.getById] INICIO - Buscando parking con id:', id);
+    try {
+      const { data, error } = await supabase
+        .from('parking')
+        .select('*')
+        .eq('id_parking', id)
+        .is('deleted_at', null)
+        .single();
+
+      console.log('[Parking.getById] Consulta ejecutada, data:', data, 'error:', error);
+
+      if (error) {
+        console.error('[Parking.getById] Error:', error);
+        throw error;
+      }
+      console.log('[Parking.getById] Parking encontrado:', data);
+      return data;
+    } catch (error) {
+      console.error('[Parking.getById] Error atrapado:', error);
+      throw error;
+    }
   }
 
   /**
@@ -274,6 +286,16 @@ class Parking {
    * @returns {Promise<boolean>} True si es administrador
    */
   static async isUserAdminOfParking(userId, parkingId) {
+    const { data: usuario, error: usuarioError } = await supabase
+      .from('usuario')
+      .select('rol')
+      .eq('id_usuario', userId)
+      .single();
+    
+    if (usuarioError && usuarioError.code !== 'PGRST116') throw usuarioError;
+    
+    if (usuario.rol === 'admin_general') return true;
+    
     const { data, error } = await supabase
       .from('usuario_parking')
       .select('*')

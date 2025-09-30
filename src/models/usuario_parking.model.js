@@ -20,16 +20,35 @@ class UsuarioParking {
   }
 
   static async hasRole(userId, parkingId, roles) {
-    const rolesArray = Array.isArray(roles) ? roles : [roles];
-    const { data, error } = await supabase
-      .from('usuario_parking')
-      .select('rol_en_parking')
-      .eq('id_usuario', userId)
-      .eq('id_parking', parkingId)
-      .in('rol_en_parking', rolesArray)
-      .maybeSingle();
-    if (error) throw error;
-    return !!data;
+    console.log('[UsuarioParking.hasRole] INICIO - userId:', userId, 'parkingId:', parkingId, 'roles:', roles);
+    console.log('[UsuarioParking.hasRole] Ejecutando consulta...');
+
+    try {
+      const rolesArray = Array.isArray(roles) ? roles : [roles];
+      console.log('[UsuarioParking.hasRole] rolesArray:', rolesArray);
+
+      const { data, error } = await supabase
+        .from('usuario_parking')
+        .select('rol_en_parking')
+        .eq('id_usuario', userId)
+        .eq('id_parking', parkingId)
+        .in('rol_en_parking', rolesArray)
+        .maybeSingle();
+
+      console.log('[UsuarioParking.hasRole] Consulta ejecutada, data:', data, 'error:', error);
+
+      if (error) {
+        console.error('[UsuarioParking.hasRole] Error de Supabase:', error);
+        throw error;
+      }
+
+      const result = !!data;
+      console.log('[UsuarioParking.hasRole] Resultado:', result, 'data:', data);
+      return result;
+    } catch (error) {
+      console.error('[UsuarioParking.hasRole] Error atrapado:', error);
+      throw error;
+    }
   }
 
   static async add(userId, parkingId, rol) {

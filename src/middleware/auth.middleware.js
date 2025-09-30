@@ -222,55 +222,104 @@ const isOwner = (resourceType, paramName = 'id') => {
 const isParkingAdmin = (paramName = 'id') => {
   return async (req, res, next) => {
     try {
+      console.log('[isParkingAdmin] ========== DEBUG INICIO ==========');
       const userId = req.user.id;
       const parkingId = req.params[paramName];
       console.log('[isParkingAdmin] userId:', userId, 'parkingId:', parkingId);
-      
-      // Verificar si el usuario es administrador del parking
-      const { data, error } = await supabase
+
+      // Consulta 1: Verificar parking existe
+      console.log('[isParkingAdmin] Paso 1: Consultando parking...');
+      const { data: parking, error: parkingError } = await supabase
         .from('parking')
         .select('id_admin')
         .eq('id_parking', parkingId)
         .single();
-      
-      if (error) {
-        console.warn('[isParkingAdmin] Parking no encontrado. id:', parkingId, 'error:', error.message);
-        return res.status(404).json({ 
-          success: false, 
+
+      if (parkingError) {
+        console.log('[isParkingAdmin] ERROR en consulta parking:', parkingError.message);
+        return res.status(404).json({
+          success: false,
           message: 'Parking no encontrado',
-          error: process.env.NODE_ENV === 'development' ? error.message : {}
+          error: parkingError.message
         });
       }
-      
-      // admin_general pasa
-      const { data: usuario } = await supabase
+
+      console.log('[isParkingAdmin] Paso 1 OK - Parking encontrado:', parking?.id_admin);
+
+      // Consulta 2: Verificar usuario existe y rol
+      console.log('[isParkingAdmin] Paso 2: Consultando usuario...');
+      const { data: usuario, error: usuarioError } = await supabase
         .from('usuario')
         .select('rol')
         .eq('id_usuario', userId)
         .single();
 
-      if (usuario && usuario.rol === 'admin_general') {
-        console.log('[isParkingAdmin] Bypass por admin_general');
+      if (usuarioError) {
+        console.log('[isParkingAdmin] ERROR en consulta usuario:', usuarioError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Error al verificar usuario',
+          error: usuarioError.message
+        });
+      }
+
+      console.log('[isParkingAdmin] Paso 2 OK - Usuario rol:', usuario?.rol);
+
+      // Consulta 3: Verificar permisos en usuario_parking
+      console.log('[isParkingAdmin] Paso 3: Verificando permisos en usuario_parking...');
+
+      // Opción A: Usuario es admin_general (bypass)
+      if (usuario.rol === 'admin_general') {
+        console.log('[isParkingAdmin] Paso 3 OK - Usuario es admin_general');
+        console.log('[isParkingAdmin] ========== DEBUG FINAL - PERMISOS OK ==========');
         return next();
       }
 
-      // admin en pivote o id_admin del parking
-      const esAdminPivote = await UsuarioParking.hasRole(userId, parseInt(parkingId, 10), 'admin_parking');
-      const esAdminDirecto = data && data.id_admin === userId;
-
-      console.log('[isParkingAdmin] esAdminPivote:', esAdminPivote, 'esAdminDirecto:', esAdminDirecto);
-      if (!esAdminPivote && !esAdminDirecto) {
-        return res.status(403).json({ success: false, message: 'No tiene permisos para administrar este parking' });
+      // Opción B: Usuario es admin directo del parking
+      const esAdminDirecto = parking.id_admin === userId;
+      if (esAdminDirecto) {
+        console.log('[isParkingAdmin] Paso 3 OK - Usuario es admin directo del parking');
+        console.log('[isParkingAdmin] ========== DEBUG FINAL - PERMISOS OK ==========');
+        return next();
       }
-      
-      console.log('[isParkingAdmin] OK permisos');
+
+      // Opción C: Usuario tiene rol admin_parking en usuario_parking
+      console.log('[isParkingAdmin] Paso 3C: Verificando rol admin_parking en tabla usuario_parking...');
+      const { data: usuarioParking, error: usuarioParkingError } = await supabase
+        .from('usuario_parking')
+        .select('rol_en_parking')
+        .eq('id_usuario', userId)
+        .eq('id_parking', parseInt(parkingId, 10))
+        .eq('rol_en_parking', 'admin_parking')
+        .maybeSingle();
+
+      if (usuarioParkingError) {
+        console.log('[isParkingAdmin] ERROR en consulta usuario_parking:', usuarioParkingError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Error al verificar permisos de parking',
+          error: usuarioParkingError.message
+        });
+      }
+
+      console.log('[isParkingAdmin] Paso 3C - Usuario parking data:', usuarioParking);
+
+      if (!usuarioParking) {
+        console.log('[isParkingAdmin] ERROR: Usuario no tiene permisos admin_parking para este parking');
+        return res.status(403).json({
+          success: false,
+          message: 'No tiene permisos para administrar este parking'
+        });
+      }
+
+      console.log('[isParkingAdmin] ========== DEBUG FINAL - PERMISOS OK ==========');
       next();
     } catch (error) {
-      console.error('[isParkingAdmin] Error:', error?.message);
-      return res.status(500).json({ 
-        success: false, 
+      console.error('[isParkingAdmin] ERROR CATASTRÓFICO:', error);
+      return res.status(500).json({
+        success: false,
         message: 'Error al verificar permisos',
-        error: process.env.NODE_ENV === 'development' ? error.message : {}
+        error: error.message
       });
     }
   };
