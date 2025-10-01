@@ -1,6 +1,11 @@
-# API de Gestión de Estacionamientos
+# API de Gestión de Estacionamientos (Parking System)
 
-API RESTful desarrollada con Node.js, Express y Supabase para la gestión de estacionamientos.
+API RESTful desarrollada con Node.js, Express y Supabase para la gestión de estacionamientos. Forma parte del proyecto general "Parking System", compuesto por:
+
+- Frontend Next.js: `front-web/`
+- Backend API Node.js: `api-nodejs-parking/` (este repositorio)
+
+Esta API expone endpoints de autenticación, usuarios, parkings, espacios, reservas, ocupaciones, pagos y notificaciones. Implementa autenticación JWT, middlewares de autorización y compatibilidad con Supabase.
 
 ## Características
 
@@ -55,6 +60,29 @@ JWT_EXPIRES_IN=24h
 ```bash
 npm run dev
 ```
+
+## Esquema de Base de Datos (`bd.sql`)
+
+En la raíz del proyecto encontrarás `bd.sql`, que contiene el esquema de la base de datos (tablas principales como `usuario`, `parking`, `usuario_parking`, `espacio`, `reserva`, `ocupacion`, `pago`, `tarifa`, etc.).
+
+- Importante: el archivo incluye un esquema de referencia para documentación y contexto de desarrollo. Puede no representar el orden exacto de creación de tablas/constraints para ejecución directa.
+- Relaciones clave:
+  - `usuario_parking (id_usuario, id_parking, rol_en_parking)` enlaza usuarios con parkings y su rol dentro del parking (`admin_parking` o `empleado`).
+  - `parking (id_parking)` referencia a `usuario.id_usuario` como `id_admin` (propietario/administrador general del parking).
+  - `espacio`, `reserva`, `ocupacion`, `pago`, `tarifa` referencian al `parking` o entidades relacionadas.
+
+Este esquema guía las capas de modelos y controladores y es útil para comprender la lógica de negocio.
+
+## Control de Acceso por Roles (RBAC)
+
+- Roles globales: `admin_general`, `admin_parking`, `empleado`, `cliente`.
+- Asignaciones por parking: la tabla `usuario_parking` define el rol dentro de un parking.
+- Middlewares:
+  - `verifyToken`: valida JWT y adjunta `req.user`.
+  - `hasRole([roles])`: restringe rutas por rol global.
+  - `isParkingAdmin('id')`: verifica que el usuario sea `admin_general`, dueño del parking o `admin_parking` asignado para el `:id` de la ruta.
+
+Nota: el frontend también aplica restricciones visuales para `admin_parking` mostrando únicamente parkings asignados.
 
 ## Estructura de la API
 
