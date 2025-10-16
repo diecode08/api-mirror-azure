@@ -182,16 +182,31 @@ const updateVehiculo = async (req, res) => {
 };
 
 /**
- * Eliminar un vehículo
+ * Eliminar un vehículo (soft delete)
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
  */
 const deleteVehiculo = async (req, res) => {
   try {
     const { id } = req.params;
+    const vehiculoId = parseInt(id, 10); // Asegurar que sea un número
+    const motivo = req.body?.motivo || null; // Opcional: motivo de la baja
+    
+    console.log('[deleteVehiculo] ID del vehículo a eliminar:', vehiculoId, 'tipo:', typeof vehiculoId);
+    console.log('[deleteVehiculo] Usuario que elimina:', req.user.id);
+    console.log('[deleteVehiculo] Motivo:', motivo);
+    
+    if (isNaN(vehiculoId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de vehículo inválido'
+      });
+    }
     
     // Verificar si el vehículo existe
-    const existingVehiculo = await Vehiculo.getById(id);
+    const existingVehiculo = await Vehiculo.getById(vehiculoId);
+    console.log('[deleteVehiculo] Vehículo encontrado:', existingVehiculo);
+    
     if (!existingVehiculo) {
       return res.status(404).json({
         success: false,
@@ -201,21 +216,29 @@ const deleteVehiculo = async (req, res) => {
     
     // Verificar si el usuario es propietario del vehículo o administrador
     if (existingVehiculo.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
+      console.log('[deleteVehiculo] Permiso denegado. Usuario del vehículo:', existingVehiculo.id_usuario);
       return res.status(403).json({
         success: false,
         message: 'No tiene permisos para eliminar este vehículo'
       });
     }
     
-    // Eliminar vehículo
-    await Vehiculo.delete(id);
+    console.log('[deleteVehiculo] Ejecutando soft delete...');
+    
+    // Eliminar vehículo (soft delete)
+    const result = await Vehiculo.delete(vehiculoId, req.user.id, motivo);
+    
+    console.log('[deleteVehiculo] Resultado:', result);
     
     res.status(200).json({
       success: true,
-      message: 'Vehículo eliminado exitosamente'
+      message: 'Vehículo eliminado exitosamente',
+      data: result
     });
   } catch (error) {
-    console.error('Error al eliminar vehículo:', error);
+    console.error('[deleteVehiculo] Error al eliminar vehículo:', error);
+    console.error('[deleteVehiculo] Error message:', error.message);
+    console.error('[deleteVehiculo] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Error al eliminar vehículo',

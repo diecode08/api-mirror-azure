@@ -155,6 +155,17 @@ const isOwner = (resourceType, paramName = 'id') => {
       const userId = req.user.id;
       const resourceId = req.params[paramName];
       
+      // Si el tipo de recurso es 'params', simplemente verificar que el parámetro coincida con el usuario
+      if (resourceType === 'params') {
+        if (resourceId !== userId) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'No tiene permisos para acceder a este recurso' 
+          });
+        }
+        return next();
+      }
+      
       let tableName, idColumn, userColumn;
       
       // Configurar según el tipo de recurso

@@ -291,6 +291,7 @@ const getProfile = async (req, res) => {
         id: usuario.id_usuario,
         nombre: usuario.nombre,
         apellido: usuario.apellido,
+        email: usuario.email,
         telefono: usuario.telefono,
         rol: usuario.rol,
         fecha_registro: usuario.fecha_registro
@@ -301,6 +302,95 @@ const getProfile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error al obtener perfil',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Controlador para actualizar el perfil del usuario autenticado
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { nombre, apellido, telefono, email } = req.body;
+
+    // Validar que al menos un campo esté presente
+    if (!nombre && !apellido && !telefono && !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debe proporcionar al menos un campo para actualizar'
+      });
+    }
+
+    // Si se intenta cambiar el email, verificar que no esté en uso
+    if (email) {
+      const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: 'El formato del correo electrónico no es válido'
+        });
+      }
+
+      const { data: existingUser } = await supabase
+        .from('usuario')
+        .select('id_usuario')
+        .eq('email', email)
+        .neq('id_usuario', userId)
+        .maybeSingle();
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'El correo electrónico ya está en uso por otro usuario'
+        });
+      }
+    }
+
+    // Preparar datos para actualizar
+    const updateData = {};
+    if (nombre !== undefined) updateData.nombre = nombre;
+    if (apellido !== undefined) updateData.apellido = apellido;
+    if (telefono !== undefined) updateData.telefono = telefono;
+    if (email !== undefined) updateData.email = email;
+
+    // Actualizar en la base de datos
+    const { data, error } = await supabase
+      .from('usuario')
+      .update(updateData)
+      .eq('id_usuario', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error al actualizar perfil:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error al actualizar perfil',
+        error: process.env.NODE_ENV === 'development' ? error.message : {}
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Perfil actualizado correctamente',
+      data: {
+        id: data.id_usuario,
+        nombre: data.nombre,
+        apellido: data.apellido,
+        email: data.email,
+        telefono: data.telefono,
+        rol: data.rol
+      }
+    });
+  } catch (error) {
+    console.error('Error al actualizar perfil:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar perfil',
       error: process.env.NODE_ENV === 'development' ? error.message : {}
     });
   }
@@ -489,6 +579,7 @@ module.exports = {
   register,
   login,
   getProfile,
+  updateProfile,
   updatePassword,
   forgotPassword,
   resetPassword
