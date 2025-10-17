@@ -5,6 +5,7 @@ const { verifyToken, isOwner, isParkingAdmin } = require('../middleware/auth.mid
 
 // Rutas protegidas por autenticación
 router.get('/', verifyToken, reservaController.getAllReservas);
+router.get('/mis-reservas', verifyToken, reservaController.getMisReservas); // Nueva ruta
 router.get('/:id', verifyToken, reservaController.getReservaById);
 router.get('/usuario/:userId', verifyToken, isOwner('params', 'userId'), reservaController.getReservasByUserId);
 router.get('/espacio/:espacioId', verifyToken, reservaController.getReservasByEspacioId);

@@ -7,7 +7,7 @@ class Notificacion {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class Notificacion {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .select('*')
       .eq('id_notificacion', id)
       .single();
@@ -37,7 +37,7 @@ class Notificacion {
    */
   static async getByUserId(userId) {
     const { data, error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .select('*')
       .eq('id_usuario', userId)
       .order('fecha_envio', { ascending: false });
@@ -53,7 +53,7 @@ class Notificacion {
    */
   static async getNoLeidasByUserId(userId) {
     const { data, error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .select('*')
       .eq('id_usuario', userId)
       .eq('estado', 'no_leido')
@@ -70,7 +70,7 @@ class Notificacion {
    */
   static async create(notificacionData) {
     const { data, error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .insert([notificacionData])
       .select();
     
@@ -86,7 +86,7 @@ class Notificacion {
    */
   static async update(id, notificacionData) {
     const { data, error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .update(notificacionData)
       .eq('id_notificacion', id)
       .select();
@@ -111,7 +111,7 @@ class Notificacion {
    */
   static async marcarTodasComoLeidas(userId) {
     const { error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .update({ estado: 'leido' })
       .eq('id_usuario', userId)
       .eq('estado', 'no_leido');
@@ -127,7 +127,7 @@ class Notificacion {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('Notificacion')
+      .from('notificacion')
       .delete()
       .eq('id_notificacion', id);
     

@@ -7,7 +7,7 @@ class Ocupacion {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class Ocupacion {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .select('*')
       .eq('id_ocupacion', id)
       .single();
@@ -37,7 +37,7 @@ class Ocupacion {
    */
   static async getByUserId(userId) {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .select('*')
       .eq('id_usuario', userId);
     
@@ -52,7 +52,7 @@ class Ocupacion {
    */
   static async getByEspacioId(espacioId) {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .select('*')
       .eq('id_espacio', espacioId);
     
@@ -67,7 +67,7 @@ class Ocupacion {
    */
   static async getByReservaId(reservaId) {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .select('*')
       .eq('id_reserva', reservaId)
       .single();
@@ -82,7 +82,7 @@ class Ocupacion {
    */
   static async getActivas() {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .select('*')
       .is('hora_salida', null);
     
@@ -97,7 +97,7 @@ class Ocupacion {
    */
   static async create(ocupacionData) {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .insert([ocupacionData])
       .select();
     
@@ -113,7 +113,7 @@ class Ocupacion {
    */
   static async update(id, ocupacionData) {
     const { data, error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .update(ocupacionData)
       .eq('id_ocupacion', id)
       .select();
@@ -140,12 +140,82 @@ class Ocupacion {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('Ocupacion')
+      .from('ocupacion')
       .delete()
       .eq('id_ocupacion', id);
     
     if (error) throw error;
     return true;
+  }
+
+  /**
+   * Marcar entrada física al parking (llama a función SQL)
+   * @param {number} id_reserva - ID de la reserva
+   * @returns {Promise<number>} ID de la ocupación creada
+   */
+  static async marcarEntrada(id_reserva) {
+    const { data, error } = await supabase
+      .rpc('marcar_entrada_parking', { p_id_reserva: id_reserva });
+    
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Marcar salida física del parking (llama a función SQL)
+   * @param {number} id_ocupacion - ID de la ocupación
+   * @returns {Promise<Object>} Datos de costo y tiempo
+   */
+  static async marcarSalida(id_ocupacion) {
+    const { data, error } = await supabase
+      .rpc('marcar_salida_parking', { p_id_ocupacion: id_ocupacion });
+    
+    if (error) throw error;
+    
+    // La función SQL retorna un array con un objeto
+    if (data && data.length > 0) {
+      return {
+        costo_calculado: data[0].costo_calculado,
+        tiempo_total_horas: data[0].tiempo_total_horas
+      };
+    }
+    
+    return data;
+  }
+
+  /**
+   * Obtener ocupación activa de un usuario (desde vista SQL)
+   * @param {string} id_usuario - ID del usuario
+   * @returns {Promise<Object|null>} Ocupación activa o null
+   */
+  static async getActivaByUserId(id_usuario) {
+    const { data, error } = await supabase
+      .from('vista_ocupaciones_activas')
+      .select('*')
+      .eq('id_usuario', id_usuario)
+      .single();
+    
+    // PGRST116 = no rows found
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
+  }
+
+  /**
+   * Obtener historial de ocupaciones de un usuario (desde vista SQL)
+   * @param {string} id_usuario - ID del usuario
+   * @param {number} limit - Límite de resultados
+   * @returns {Promise<Array>} Historial de ocupaciones
+   */
+  static async getHistorialByUserId(id_usuario, limit = 50) {
+    const { data, error } = await supabase
+      .from('vista_historial_ocupaciones')
+      .select('*')
+      .eq('id_usuario', id_usuario)
+      .order('hora_salida', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    return data;
   }
 }
 

@@ -73,3 +73,8 @@ coverage/
 
 # Archivos de IDE
 *.sublime-*
+
+# Scripts de testing local (no para producción)
+test-*.ps1
+test-*.sh
+diagnostico.js

@@ -7,7 +7,7 @@ class Reserva {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class Reserva {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .select('*')
       .eq('id_reserva', id)
       .single();
@@ -37,7 +37,7 @@ class Reserva {
    */
   static async getByUserId(userId) {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .select('*')
       .eq('id_usuario', userId);
     
@@ -52,7 +52,7 @@ class Reserva {
    */
   static async getByEspacioId(espacioId) {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .select('*')
       .eq('id_espacio', espacioId);
     
@@ -69,7 +69,7 @@ class Reserva {
    */
   static async verificarDisponibilidad(espacioId, horaInicio, horaFin) {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .select('*')
       .eq('id_espacio', espacioId)
       .or(`hora_inicio.lte.${horaFin},hora_fin.gte.${horaInicio}`)
@@ -86,7 +86,7 @@ class Reserva {
    */
   static async create(reservaData) {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .insert([reservaData])
       .select();
     
@@ -102,7 +102,7 @@ class Reserva {
    */
   static async update(id, reservaData) {
     const { data, error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .update(reservaData)
       .eq('id_reserva', id)
       .select();
@@ -128,7 +128,7 @@ class Reserva {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('Reserva')
+      .from('reserva')
       .delete()
       .eq('id_reserva', id);
     

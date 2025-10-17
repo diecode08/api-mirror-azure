@@ -263,19 +263,19 @@ const createOcupacion = async (req, res) => {
     // Crear notificación para el usuario
     await Notificacion.create({
       id_usuario,
-      titulo: 'Ocupación iniciada',
+      
       mensaje: `Has iniciado una ocupación en ${parking.nombre} para el espacio ${espacio.numero_espacio} a las ${fecha_entrada.toLocaleString()}`,
       tipo: 'ocupacion',
-      leida: false
+      estado: 'no_leido'
     });
     
     // Crear notificación para el administrador del parking
     await Notificacion.create({
       id_usuario: parking.id_admin,
-      titulo: 'Nueva ocupación',
+      
       mensaje: `Se ha iniciado una nueva ocupación en tu parking ${parking.nombre} para el espacio ${espacio.numero_espacio}`,
       tipo: 'ocupacion',
-      leida: false
+      estado: 'no_leido'
     });
     
     res.status(201).json({
@@ -344,19 +344,19 @@ const registrarSalida = async (req, res) => {
     // Crear notificación para el usuario
     await Notificacion.create({
       id_usuario: existingOcupacion.id_usuario,
-      titulo: 'Ocupación finalizada',
+      
       mensaje: `Has finalizado tu ocupación en ${parking.nombre} para el espacio ${espacio.numero_espacio}. Duración: ${duracion_horas.toFixed(2)} horas`,
       tipo: 'ocupacion',
-      leida: false
+      estado: 'no_leido'
     });
     
     // Crear notificación para el administrador del parking
     await Notificacion.create({
       id_usuario: parking.id_admin,
-      titulo: 'Ocupación finalizada',
+      
       mensaje: `Se ha finalizado una ocupación en tu parking ${parking.nombre} para el espacio ${espacio.numero_espacio}`,
       tipo: 'ocupacion',
-      leida: false
+      estado: 'no_leido'
     });
     
     res.status(200).json({
@@ -422,6 +422,173 @@ const deleteOcupacion = async (req, res) => {
   }
 };
 
+/**
+ * Marcar entrada física al parking (usando función SQL)
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const marcarEntrada = async (req, res) => {
+  try {
+    const { id_reserva } = req.body;
+    const id_usuario = req.user.id;
+    
+    if (!id_reserva) {
+      return res.status(400).json({
+        success: false,
+        message: 'El ID de la reserva es requerido'
+      });
+    }
+    
+    // Verificar que la reserva exista y pertenezca al usuario
+    const reserva = await Reserva.getById(id_reserva);
+    if (!reserva) {
+      return res.status(404).json({
+        success: false,
+        message: 'Reserva no encontrada'
+      });
+    }
+    
+    if (reserva.id_usuario !== id_usuario) {
+      return res.status(403).json({
+        success: false,
+        message: 'Esta reserva no te pertenece'
+      });
+    }
+    
+    if (reserva.estado !== 'pendiente') {
+      return res.status(400).json({
+        success: false,
+        message: `La reserva ya está en estado: ${reserva.estado}`
+      });
+    }
+    
+    // Llamar a la función SQL marcar_entrada_parking
+    const result = await Ocupacion.marcarEntrada(id_reserva);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Entrada registrada exitosamente',
+      data: { id_ocupacion: result }
+    });
+  } catch (error) {
+    console.error('Error al marcar entrada:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Error al marcar entrada',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Marcar salida física del parking (usando función SQL)
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const marcarSalida = async (req, res) => {
+  try {
+    const { id_ocupacion } = req.body;
+    const id_usuario = req.user.id;
+    
+    if (!id_ocupacion) {
+      return res.status(400).json({
+        success: false,
+        message: 'El ID de la ocupación es requerido'
+      });
+    }
+    
+    // Verificar que la ocupación exista y pertenezca al usuario
+    const ocupacion = await Ocupacion.getById(id_ocupacion);
+    if (!ocupacion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ocupación no encontrada'
+      });
+    }
+    
+    if (ocupacion.id_usuario !== id_usuario) {
+      return res.status(403).json({
+        success: false,
+        message: 'Esta ocupación no te pertenece'
+      });
+    }
+    
+    if (ocupacion.hora_salida !== null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Esta ocupación ya tiene salida registrada'
+      });
+    }
+    
+    // Llamar a la función SQL marcar_salida_parking
+    const result = await Ocupacion.marcarSalida(id_ocupacion);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Salida registrada exitosamente',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error al marcar salida:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Error al marcar salida',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Obtener ocupación activa del usuario autenticado
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getOcupacionActiva = async (req, res) => {
+  try {
+    const id_usuario = req.user.id;
+    
+    const ocupacionActiva = await Ocupacion.getActivaByUserId(id_usuario);
+    
+    res.status(200).json({
+      success: true,
+      data: ocupacionActiva || null
+    });
+  } catch (error) {
+    console.error('Error al obtener ocupación activa:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener ocupación activa',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Obtener historial de ocupaciones del usuario autenticado
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getHistorialOcupaciones = async (req, res) => {
+  try {
+    const id_usuario = req.user.id;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const historial = await Ocupacion.getHistorialByUserId(id_usuario, limit);
+    
+    res.status(200).json({
+      success: true,
+      data: historial
+    });
+  } catch (error) {
+    console.error('Error al obtener historial de ocupaciones:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener historial de ocupaciones',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
 module.exports = {
   getAllOcupaciones,
   getOcupacionById,
@@ -430,5 +597,10 @@ module.exports = {
   getOcupacionesActivas,
   createOcupacion,
   registrarSalida,
-  deleteOcupacion
+  deleteOcupacion,
+  // Nuevas funciones
+  marcarEntrada,
+  marcarSalida,
+  getOcupacionActiva,
+  getHistorialOcupaciones
 };

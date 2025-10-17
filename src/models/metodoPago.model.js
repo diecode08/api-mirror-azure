@@ -7,7 +7,7 @@ class MetodoPago {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('MetodoPago')
+      .from('metodopago')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class MetodoPago {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('MetodoPago')
+      .from('metodopago')
       .select('*')
       .eq('id_metodo', id)
       .single();
@@ -37,7 +37,7 @@ class MetodoPago {
    */
   static async create(metodoData) {
     const { data, error } = await supabase
-      .from('MetodoPago')
+      .from('metodopago')
       .insert([metodoData])
       .select();
     
@@ -53,7 +53,7 @@ class MetodoPago {
    */
   static async update(id, metodoData) {
     const { data, error } = await supabase
-      .from('MetodoPago')
+      .from('metodopago')
       .update(metodoData)
       .eq('id_metodo', id)
       .select();
@@ -69,7 +69,7 @@ class MetodoPago {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('MetodoPago')
+      .from('metodopago')
       .delete()
       .eq('id_metodo', id);
     

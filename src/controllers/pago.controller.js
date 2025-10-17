@@ -130,11 +130,10 @@ const createPago = async (req, res) => {
     
     // Crear notificación para el usuario
     await Notificacion.create({
-      usuario_id: ocupacion.usuario_id,
-      titulo: 'Pago registrado',
+      id_usuario: ocupacion.usuario_id,
       mensaje: `Se ha registrado un pago de $${monto} para tu ocupación. Estado: Pendiente.`,
       tipo: 'pago',
-      leido: false
+      estado: 'no_leido'
     });
     
     res.status(201).json({
@@ -264,11 +263,10 @@ const updateEstadoPago = async (req, res) => {
     
     // Crear notificación para el usuario
     await Notificacion.create({
-      usuario_id: ocupacion.usuario_id,
-      titulo: 'Estado de pago actualizado',
+      id_usuario: ocupacion.usuario_id,
       mensaje: `El estado de tu pago de $${existingPago.monto} ha sido actualizado a: ${estado}.`,
       tipo: 'pago',
-      leido: false
+      estado: 'no_leido'
     });
     
     res.status(200).json({

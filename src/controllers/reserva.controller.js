@@ -60,6 +60,59 @@ const getReservaById = async (req, res) => {
 };
 
 /**
+ * Obtener MIS reservas (del usuario autenticado) con datos completos
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getMisReservas = async (req, res) => {
+  try {
+    const id_usuario = req.user.id;
+    
+    // Obtener reservas con JOIN para traer datos completos
+    const { data, error } = await require('../config/supabase')
+      .from('reserva')
+      .select(`
+        *,
+        espacio:id_espacio(
+          id_espacio,
+          numero_espacio,
+          estado,
+          parking:id_parking(
+            id_parking,
+            nombre,
+            direccion,
+            latitud,
+            longitud
+          )
+        ),
+        vehiculo:id_vehiculo(
+          id_vehiculo,
+          placa,
+          marca,
+          modelo,
+          color
+        )
+      `)
+      .eq('id_usuario', id_usuario)
+      .order('fecha_reserva', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.status(200).json({
+      success: true,
+      data: data || []
+    });
+  } catch (error) {
+    console.error('Error al obtener mis reservas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener tus reservas',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
  * Obtener reservas por ID de usuario
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
@@ -188,12 +241,31 @@ const createReserva = async (req, res) => {
       });
     }
     
+    // Verificar si el usuario ya tiene una reserva activa
+    const reservasActivas = await Reserva.getByUserId(id_usuario);
+    const tieneReservaActiva = reservasActivas.some(r => r.estado === 'activa');
+    
+    if (tieneReservaActiva) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ya tienes una reserva activa. Debes cancelarla o completarla antes de crear una nueva.'
+      });
+    }
+    
     // Verificar si el espacio existe
     const espacio = await Espacio.getById(id_espacio);
     if (!espacio) {
       return res.status(404).json({
         success: false,
         message: 'Espacio no encontrado'
+      });
+    }
+    
+    // Verificar que el espacio esté disponible (no reservado, ocupado o deshabilitado)
+    if (espacio.estado !== 'disponible') {
+      return res.status(400).json({
+        success: false,
+        message: `El espacio no está disponible (estado actual: ${espacio.estado})`
       });
     }
     
@@ -222,14 +294,15 @@ const createReserva = async (req, res) => {
       });
     }
     
-    // Crear reserva
+    // Crear reserva (estado 'activa' porque ya está confirmada)
+    // IMPORTANTE: Las columnas en la BD son hora_inicio y hora_fin, no fecha_inicio y fecha_fin
     const reservaData = {
       id_usuario,
       id_espacio,
       id_vehiculo,
-      fecha_inicio,
-      fecha_fin,
-      estado: 'pendiente'
+      hora_inicio: fecha_inicio,  // Mapear fecha_inicio -> hora_inicio
+      hora_fin: fecha_fin,         // Mapear fecha_fin -> hora_fin
+      estado: 'activa'
     };
     
     const nuevaReserva = await Reserva.create(reservaData);
@@ -240,19 +313,17 @@ const createReserva = async (req, res) => {
     // Crear notificación para el usuario
     await Notificacion.create({
       id_usuario,
-      titulo: 'Reserva creada',
-      mensaje: `Has creado una reserva en ${parking.nombre} para el espacio ${espacio.numero_espacio} desde ${new Date(fecha_inicio).toLocaleString()} hasta ${new Date(fecha_fin).toLocaleString()}`,
+      mensaje: `Reserva creada en ${parking.nombre} para el espacio ${espacio.numero_espacio}`,
       tipo: 'reserva',
-      leida: false
+      estado: 'no_leido'
     });
     
     // Crear notificación para el administrador del parking
     await Notificacion.create({
       id_usuario: parking.id_admin,
-      titulo: 'Nueva reserva',
-      mensaje: `Se ha creado una nueva reserva en tu parking ${parking.nombre} para el espacio ${espacio.numero_espacio}`,
+      mensaje: `Nueva reserva en ${parking.nombre} - Espacio ${espacio.numero_espacio}`,
       tipo: 'reserva',
-      leida: false
+      estado: 'no_leido'
     });
     
     res.status(201).json({
@@ -370,10 +441,10 @@ const updateReserva = async (req, res) => {
     // Crear notificación para el usuario
     await Notificacion.create({
       id_usuario: existingReserva.id_usuario,
-      titulo: 'Reserva actualizada',
+      
       mensaje: `Tu reserva en ${parking.nombre} para el espacio ${espacio.numero_espacio} ha sido actualizada`,
       tipo: 'reserva',
-      leida: false
+      estado: 'no_leido'
     });
     
     res.status(200).json({
@@ -448,30 +519,27 @@ const updateEstadoReserva = async (req, res) => {
     // Crear notificación para el usuario
     await Notificacion.create({
       id_usuario: existingReserva.id_usuario,
-      titulo: 'Estado de reserva actualizado',
-      mensaje: `El estado de tu reserva en ${parking.nombre} para el espacio ${espacio.numero_espacio} ha sido actualizado a ${estado}`,
+      mensaje: `Estado de reserva en ${parking.nombre} - Espacio ${espacio.numero_espacio} actualizado a: ${estado}`,
       tipo: 'reserva',
-      leida: false
+      estado: 'no_leido'
     });
     
     // Si el cambio lo hizo el usuario, notificar al administrador del parking
     if (req.user.id === existingReserva.id_usuario) {
       await Notificacion.create({
         id_usuario: parking.id_admin,
-        titulo: 'Estado de reserva actualizado',
-        mensaje: `El usuario ha actualizado el estado de su reserva en ${parking.nombre} para el espacio ${espacio.numero_espacio} a ${estado}`,
+        mensaje: `Usuario actualizó reserva en ${parking.nombre} - Espacio ${espacio.numero_espacio} a: ${estado}`,
         tipo: 'reserva',
-        leida: false
+        estado: 'no_leido'
       });
     }
     // Si el cambio lo hizo el administrador, notificar al usuario
     else if (req.user.id === parking.id_admin) {
       await Notificacion.create({
         id_usuario: existingReserva.id_usuario,
-        titulo: 'Estado de reserva actualizado por administrador',
-        mensaje: `El administrador ha actualizado el estado de tu reserva en ${parking.nombre} para el espacio ${espacio.numero_espacio} a ${estado}`,
+        mensaje: `Administrador actualizó tu reserva en ${parking.nombre} - Espacio ${espacio.numero_espacio} a: ${estado}`,
         tipo: 'reserva',
-        leida: false
+        estado: 'no_leido'
       });
     }
     
@@ -526,19 +594,19 @@ const deleteReserva = async (req, res) => {
     // Crear notificación para el usuario
     await Notificacion.create({
       id_usuario: existingReserva.id_usuario,
-      titulo: 'Reserva eliminada',
+      
       mensaje: `Tu reserva en ${parking.nombre} para el espacio ${espacio.numero_espacio} ha sido eliminada`,
       tipo: 'reserva',
-      leida: false
+      estado: 'no_leido'
     });
     
     // Crear notificación para el administrador del parking
     await Notificacion.create({
       id_usuario: parking.id_admin,
-      titulo: 'Reserva eliminada',
+      
       mensaje: `Una reserva en tu parking ${parking.nombre} para el espacio ${espacio.numero_espacio} ha sido eliminada`,
       tipo: 'reserva',
-      leida: false
+      estado: 'no_leido'
     });
     
     res.status(200).json({
@@ -558,6 +626,7 @@ const deleteReserva = async (req, res) => {
 module.exports = {
   getAllReservas,
   getReservaById,
+  getMisReservas,
   getReservasByUserId,
   getReservasByEspacioId,
   verificarDisponibilidad,
