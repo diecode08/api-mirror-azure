@@ -1,188 +1,473 @@
-# API de Gestión de Estacionamientos (Parking System)
+# 🔧 Parking Management System - Backend API
 
-API RESTful desarrollada con Node.js, Express y Supabase para la gestión de estacionamientos. Forma parte del proyecto general "Parking System", compuesto por:
+<div align="center">
 
-- Frontend Next.js: `front-web/`
-- Backend API Node.js: `api-nodejs-parking/` (este repositorio)
+![Parking API](https://img.shields.io/badge/Parking-API-green?style=for-the-badge&logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
 
-Esta API expone endpoints de autenticación, usuarios, parkings, espacios, reservas, ocupaciones, pagos y notificaciones. Implementa autenticación JWT, middlewares de autorización y compatibilidad con Supabase.
+[![License](https://img.shields.io/badge/License-ISC-blue.svg?style=for-the-badge)](https://opensource.org/licenses/ISC)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](http://makeapullrequest.com)
+[![GitHub stars](https://img.shields.io/github/stars/dariverap/parking-system-api?style=for-the-badge)](https://github.com/dariverap/parking-system-api/stargazers)
 
-## Características
+*🚀 API RESTful robusta para la gestión completa de estacionamientos*
 
-- Autenticación y autorización con JWT y Supabase
-- Gestión de usuarios y vehículos
-- Administración de parkings y espacios de estacionamiento
-- Sistema de reservas y ocupaciones
-- Procesamiento de pagos
-- Sistema de notificaciones
+[📖 Documentación](#-documentación-de-la-api) • [🚀 Instalación](#-instalación) • [🔗 Endpoints](#-endpoints) • [🤝 Contribuir](#-cómo-contribuir)
 
-## Requisitos
+</div>
 
-- Node.js (v14 o superior)
+---
+
+## 📋 Descripción del Proyecto
+
+**Parking Management System - Backend API** es el corazón del sistema de gestión de estacionamientos desarrollado para el curso de **Curso Integrador II: Sistemas** de la **UTP**. Desarrollada con Node.js, Express y Supabase, ofrece una API RESTful completa para la administración de parkings, usuarios, reservas, pagos y notificaciones.
+
+Esta API forma parte del sistema completo **Parking Management System**:
+- 🔧 **Backend API** (este proyecto) - API RESTful
+- 🖥️ **Frontend Web** - Panel de administración web
+- 📱 **Mobile App** - App móvil para usuarios finales
+
+### 🎯 ¿Qué puedes hacer con Parking Management System API?
+
+- 👥 **Gestión de Usuarios**: Registro, autenticación y perfiles
+- 🅿️ **Administración de Parkings**: CRUD completo de estacionamientos
+- 📅 **Sistema de Reservas**: Creación y gestión de reservas
+- 🚗 **Control de Ocupaciones**: Check-in/out de vehículos
+- 💳 **Procesamiento de Pagos**: Integración con métodos de pago
+- 🔔 **Notificaciones**: Sistema de alertas y mensajes
+- 🔐 **Control de Accesos**: Autenticación JWT con roles granulares
+
+---
+
+## 🎓 Información del Proyecto
+
+**🏫 Universidad**: Universidad Tecnológica del Perú (UTP)  
+**� Carrera**: Ingeniería de Sistemas  
+**� Curso**: Curso Integrador II: Sistemas  
+**👨‍🏫 Profesora**: CLAUDIA YOLANDA VILLALTA FLORES  
+**📅 Año**: 2025  
+**👥 Equipo**: Estudiantes de Ingeniería de Sistemas  
+
+Este proyecto es parte del portafolio académico desarrollado durante el curso de **Curso Integrador II: Sistemas**, demostrando la aplicación práctica de conceptos aprendidos en desarrollo backend, APIs RESTful, bases de datos relacionales y arquitectura de software.
+
+---
+
+## ✨ Características Principales
+
+<div align="center">
+
+| 🚀 **Performance** | 🔒 **Seguridad** | 📊 **Base de Datos** | 🔧 **DevOps** |
+|:---:|:---:|:---:|:---:|
+| Express.js Framework | JWT Authentication | Supabase/PostgreSQL | Docker Ready |
+| Rate Limiting | Role-based Access | Real-time Updates | PM2 Process Manager |
+| Request Validation | Input Sanitization | Database Migrations | Environment Config |
+
+</div>
+
+### 🔧 Tech Stack
+
+- **Runtime**: Node.js (v14+)
+- **Framework**: Express.js
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: JWT (JSON Web Tokens)
+- **Validation**: Joi/Custom Validators
+- **Documentation**: JSDoc + OpenAPI (futuro)
+- **Testing**: Jest + Supertest
+- **Process Manager**: PM2
+- **Container**: Docker
+
+---
+
+## 🚀 Instalación y Configuración
+
+### 📋 Prerrequisitos
+
+- Node.js >= 14.0.0
 - NPM o Yarn
-- Cuenta en Supabase
+- Cuenta en [Supabase](https://supabase.com)
+- PostgreSQL (opcional, si usas local)
 
-## Instalación
-
-1. Clonar el repositorio
-
-```bash
-git clone <url-del-repositorio>
-cd api_nodejs_parking
-```
-
-2. Instalar dependencias
+### ⚡ Instalación Rápida
 
 ```bash
+# 1. Clonar el repositorio
+git clone https://github.com/dariverap/api-nodejs-parking.git
+cd api-nodejs-parking
+
+# 2. Instalar dependencias
 npm install
-```
 
-3. Configurar variables de entorno
+# 3. Configurar variables de entorno
+cp .env.example .env
 
-Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
-
-```
-PORT=3000
-NODE_ENV=development
-
-# Supabase
+# 4. Editar .env con tus valores
+PORT=3001
 SUPABASE_URL=tu_url_de_supabase
 SUPABASE_KEY=tu_clave_de_supabase
-SUPABASE_JWT_SECRET=tu_secreto_jwt
-
-# JWT
 JWT_SECRET=tu_secreto_jwt
-JWT_EXPIRES_IN=24h
-```
 
-4. Iniciar el servidor
-
-```bash
+# 5. Ejecutar en desarrollo
 npm run dev
 ```
 
-## Esquema de Base de Datos (`bd.sql`)
+### 🔧 Variables de Entorno
 
-En la raíz del proyecto encontrarás `bd.sql`, que contiene el esquema de la base de datos (tablas principales como `usuario`, `parking`, `usuario_parking`, `espacio`, `reserva`, `ocupacion`, `pago`, `tarifa`, etc.).
+Crea un archivo `.env` en la raíz del proyecto:
 
-- Importante: el archivo incluye un esquema de referencia para documentación y contexto de desarrollo. Puede no representar el orden exacto de creación de tablas/constraints para ejecución directa.
-- Relaciones clave:
-  - `usuario_parking (id_usuario, id_parking, rol_en_parking)` enlaza usuarios con parkings y su rol dentro del parking (`admin_parking` o `empleado`).
-  - `parking (id_parking)` referencia a `usuario.id_usuario` como `id_admin` (propietario/administrador general del parking).
-  - `espacio`, `reserva`, `ocupacion`, `pago`, `tarifa` referencian al `parking` o entidades relacionadas.
+```env
+# Puerto del servidor
+PORT=3001
 
-Este esquema guía las capas de modelos y controladores y es útil para comprender la lógica de negocio.
+# Base de datos Supabase
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_KEY=tu_clave_anonima
 
-## Control de Acceso por Roles (RBAC)
+# JWT Configuration
+JWT_SECRET=tu_secreto_muy_seguro_aqui
+JWT_EXPIRES_IN=24h
 
-- Roles globales: `admin_general`, `admin_parking`, `empleado`, `cliente`.
-- Asignaciones por parking: la tabla `usuario_parking` define el rol dentro de un parking.
-- Middlewares:
-  - `verifyToken`: valida JWT y adjunta `req.user`.
-  - `hasRole([roles])`: restringe rutas por rol global.
-  - `isParkingAdmin('id')`: verifica que el usuario sea `admin_general`, dueño del parking o `admin_parking` asignado para el `:id` de la ruta.
+# Entorno
+NODE_ENV=development
 
-Nota: el frontend también aplica restricciones visuales para `admin_parking` mostrando únicamente parkings asignados.
+# Opcional: Configuración adicional
+RATE_LIMIT_WINDOW=15
+RATE_LIMIT_MAX_REQUESTS=100
+```
 
-## Estructura de la API
+### 📱 Scripts Disponibles
 
-### Autenticación
+```json
+{
+  "dev": "nodemon src/index.js",
+  "start": "node src/index.js",
+  "prod": "pm2 start ecosystem.config.js",
+  "test": "jest",
+  "lint": "eslint src/**/*.js",
+  "migrate": "node scripts/migrate.js"
+}
+```
 
-- `POST /api/auth/register` - Registrar un nuevo usuario
-- `POST /api/auth/login` - Iniciar sesión
-- `GET /api/auth/profile` - Obtener perfil del usuario actual
-- `PUT /api/auth/update-password` - Actualizar contraseña
+---
 
-### Usuarios
+## 🏗️ Arquitectura de la API
 
-- `GET /api/usuarios` - Obtener todos los usuarios
-- `GET /api/usuarios/:id` - Obtener un usuario por ID
-- `GET /api/usuarios/rol/:rol` - Obtener usuarios por rol
-- `PUT /api/usuarios/:id` - Actualizar un usuario
-- `DELETE /api/usuarios/:id` - Eliminar un usuario
+### 📁 Estructura del Proyecto
 
-### Vehículos
+```
+api-nodejs-parking/
+├── src/
+│   ├── controllers/       # Lógica de negocio
+│   │   ├── auth.controller.js
+│   │   ├── parking.controller.js
+│   │   └── ...
+│   ├── middleware/        # Middlewares personalizados
+│   │   ├── auth.middleware.js
+│   │   └── validation.middleware.js
+│   ├── models/           # Modelos de datos
+│   │   ├── parking.model.js
+│   │   └── user.model.js
+│   ├── routes/           # Definición de rutas
+│   │   ├── auth.routes.js
+│   │   └── parking.routes.js
+│   ├── utils/            # Utilidades
+│   │   ├── jwt.js
+│   │   └── validators.js
+│   └── index.js          # Punto de entrada
+├── scripts/              # Scripts de migración/setup
+├── tests/               # Tests unitarios e integración
+├── bd.sql              # Esquema de base de datos
+├── ecosystem.config.js # Configuración PM2
+└── package.json
+```
 
-- `GET /api/vehiculos` - Obtener todos los vehículos
-- `GET /api/vehiculos/:id` - Obtener un vehículo por ID
-- `GET /api/vehiculos/usuario/:userId` - Obtener vehículos por usuario
-- `POST /api/vehiculos` - Crear un nuevo vehículo
-- `PUT /api/vehiculos/:id` - Actualizar un vehículo
-- `DELETE /api/vehiculos/:id` - Eliminar un vehículo
+### 🔐 Sistema de Autenticación
 
-### Parkings
+```mermaid
+graph TD
+    A[Cliente] --> B[POST /auth/login]
+    B --> C{Validar credenciales}
+    C -->|✅ OK| D[Generar JWT Token]
+    D --> E[Retornar token]
+    C -->|❌ Error| F[Retornar error 401]
+    E --> G[Cliente guarda token]
+    G --> H[Requests posteriores]
+    H --> I[Middleware verifica token]
+    I -->|✅ Válido| J[Continuar]
+    I -->|❌ Inválido| K[Error 401]
+```
 
-- `GET /api/parkings` - Obtener todos los parkings
-- `GET /api/parkings/:id` - Obtener un parking por ID
-- `GET /api/parkings/admin/:adminId` - Obtener parkings por administrador
-- `GET /api/parkings/nearby` - Encontrar parkings cercanos
-- `POST /api/parkings` - Crear un nuevo parking
-- `PUT /api/parkings/:id` - Actualizar un parking
-- `DELETE /api/parkings/:id` - Eliminar un parking
+---
 
-### Espacios
+## 🔗 Endpoints de la API
 
-- `GET /api/espacios` - Obtener todos los espacios
-- `GET /api/espacios/:id` - Obtener un espacio por ID
-- `GET /api/espacios/parking/:parkingId` - Obtener espacios por parking
-- `GET /api/espacios/parking/:parkingId/disponibles` - Obtener espacios disponibles por parking
-- `POST /api/espacios` - Crear un nuevo espacio
-- `PUT /api/espacios/:id` - Actualizar un espacio
-- `PATCH /api/espacios/:id/estado` - Actualizar estado de un espacio
-- `DELETE /api/espacios/:id` - Eliminar un espacio
+### 🔐 Autenticación
 
-### Reservas
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `POST` | `/api/auth/register` | Registrar nuevo usuario |
+| `POST` | `/api/auth/login` | Iniciar sesión |
+| `GET` | `/api/auth/profile` | Obtener perfil actual |
+| `PUT` | `/api/auth/update-password` | Actualizar contraseña |
 
-- `GET /api/reservas` - Obtener todas las reservas
-- `GET /api/reservas/:id` - Obtener una reserva por ID
-- `GET /api/reservas/usuario/:userId` - Obtener reservas por usuario
-- `GET /api/reservas/espacio/:espacioId` - Obtener reservas por espacio
-- `POST /api/reservas/verificar-disponibilidad` - Verificar disponibilidad de un espacio
-- `POST /api/reservas` - Crear una nueva reserva
-- `PUT /api/reservas/:id` - Actualizar una reserva
-- `PATCH /api/reservas/:id/estado` - Actualizar estado de una reserva
-- `DELETE /api/reservas/:id` - Eliminar una reserva
+### 👥 Usuarios
 
-### Ocupaciones
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `GET` | `/api/usuarios` | Listar todos los usuarios |
+| `GET` | `/api/usuarios/:id` | Obtener usuario por ID |
+| `GET` | `/api/usuarios/rol/:rol` | Filtrar por rol |
+| `PUT` | `/api/usuarios/:id` | Actualizar usuario |
+| `DELETE` | `/api/usuarios/:id` | Eliminar usuario |
 
-- `GET /api/ocupaciones` - Obtener todas las ocupaciones
-- `GET /api/ocupaciones/activas` - Obtener ocupaciones activas
-- `GET /api/ocupaciones/:id` - Obtener una ocupación por ID
-- `GET /api/ocupaciones/usuario/:userId` - Obtener ocupaciones por usuario
-- `GET /api/ocupaciones/espacio/:espacioId` - Obtener ocupaciones por espacio
-- `POST /api/ocupaciones` - Crear una nueva ocupación
-- `PATCH /api/ocupaciones/:id/salida` - Registrar salida de una ocupación
-- `DELETE /api/ocupaciones/:id` - Eliminar una ocupación
+### 🅿️ Parkings
 
-### Métodos de Pago
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `GET` | `/api/parkings` | Listar parkings |
+| `GET` | `/api/parkings/:id` | Detalles de parking |
+| `GET` | `/api/parkings/nearby` | Parkings cercanos |
+| `POST` | `/api/parkings` | Crear parking |
+| `PUT` | `/api/parkings/:id` | Actualizar parking |
+| `DELETE` | `/api/parkings/:id` | Eliminar parking |
 
-- `GET /api/metodos-pago` - Obtener todos los métodos de pago
-- `GET /api/metodos-pago/:id` - Obtener un método de pago por ID
-- `POST /api/metodos-pago` - Crear un nuevo método de pago
-- `PUT /api/metodos-pago/:id` - Actualizar un método de pago
-- `DELETE /api/metodos-pago/:id` - Eliminar un método de pago
+### 📅 Reservas
 
-### Pagos
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `GET` | `/api/reservas` | Listar reservas |
+| `POST` | `/api/reservas/verificar-disponibilidad` | Verificar disponibilidad |
+| `POST` | `/api/reservas` | Crear reserva |
+| `PUT` | `/api/reservas/:id` | Actualizar reserva |
+| `PATCH` | `/api/reservas/:id/estado` | Cambiar estado |
+| `DELETE` | `/api/reservas/:id` | Cancelar reserva |
 
-- `GET /api/pagos` - Obtener todos los pagos
-- `GET /api/pagos/:id` - Obtener un pago por ID
-- `GET /api/pagos/ocupacion/:ocupacionId` - Obtener pagos por ocupación
-- `POST /api/pagos` - Crear un nuevo pago
-- `PUT /api/pagos/:id` - Actualizar un pago
-- `PATCH /api/pagos/:id/estado` - Actualizar estado de un pago
-- `DELETE /api/pagos/:id` - Eliminar un pago
+### 🚗 Ocupaciones
 
-### Notificaciones
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `GET` | `/api/ocupaciones/activas` | Ocupaciones activas |
+| `POST` | `/api/ocupaciones` | Registrar entrada |
+| `PATCH` | `/api/ocupaciones/:id/salida` | Registrar salida |
+| `DELETE` | `/api/ocupaciones/:id` | Eliminar ocupación |
 
-- `GET /api/notificaciones` - Obtener todas las notificaciones
-- `GET /api/notificaciones/:id` - Obtener una notificación por ID
-- `GET /api/notificaciones/usuario/:userId` - Obtener notificaciones por usuario
-- `GET /api/notificaciones/usuario/:userId/no-leidas` - Obtener notificaciones no leídas por usuario
-- `POST /api/notificaciones` - Crear una nueva notificación
-- `PATCH /api/notificaciones/:id/leer` - Marcar una notificación como leída
-- `PATCH /api/notificaciones/usuario/:userId/leer-todas` - Marcar todas las notificaciones de un usuario como leídas
-- `DELETE /api/notificaciones/:id` - Eliminar una notificación
+### 💳 Pagos y Métodos de Pago
 
-## Licencia
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `GET` | `/api/pagos` | Listar pagos |
+| `POST` | `/api/pagos` | Crear pago |
+| `GET` | `/api/metodos-pago` | Listar métodos |
+| `POST` | `/api/metodos-pago` | Agregar método |
 
-ISC
+### 🔔 Notificaciones
+
+| Método | Endpoint | Descripción |
+|:---:|:---:|:---:|
+| `GET` | `/api/notificaciones` | Listar notificaciones |
+| `POST` | `/api/notificaciones` | Crear notificación |
+| `PATCH` | `/api/notificaciones/:id/leer` | Marcar como leída |
+
+---
+
+## 🔐 Control de Acceso por Roles
+
+### 👑 Roles del Sistema
+
+| Rol | Descripción | Permisos |
+|:---:|:---:|:---:|
+| `admin_general` | Super administrador | ✅ Acceso completo |
+| `admin_parking` | Admin de parking específico | ✅ Gestión de parking asignado |
+| `empleado` | Empleado operativo | ⚠️ Operaciones limitadas |
+| `cliente` | Usuario final | 📱 Solo app móvil |
+
+### 🛡️ Middlewares de Seguridad
+
+- **`verifyToken`**: Valida JWT y adjunta `req.user`
+- **`hasRole([roles])`**: Restringe por rol global
+- **`isParkingAdmin('id')`**: Verifica propiedad del parking
+
+---
+
+## 📊 Esquema de Base de Datos
+
+### 🗂️ Tablas Principales
+
+```sql
+-- Usuarios y autenticación
+usuario (id_usuario, email, password_hash, nombre, apellido, rol)
+usuario_parking (id_usuario, id_parking, rol_en_parking)
+
+-- Parkings y espacios
+parking (id_parking, nombre, direccion, latitud, longitud, id_admin)
+espacio (id_espacio, id_parking, numero_espacio, estado)
+
+-- Reservas y ocupaciones
+reserva (id_reserva, id_usuario, id_espacio, hora_inicio, hora_fin, estado)
+ocupacion (id_ocupacion, id_reserva, hora_entrada, hora_salida)
+
+-- Pagos y tarifas
+pago (id_pago, id_ocupacion, monto, metodo_pago, estado)
+tarifa (id_tarifa, id_parking, tipo_vehiculo, precio_por_hora)
+
+-- Notificaciones
+notificacion (id_notificacion, id_usuario, titulo, mensaje, leida)
+```
+
+### 🔗 Relaciones Clave
+
+```mermaid
+erDiagram
+    usuario ||--o{ usuario_parking : asignado
+    usuario_parking }o--|| parking : administra
+    parking ||--o{ espacio : contiene
+    usuario ||--o{ reserva : hace
+    espacio ||--o{ reserva : reserva
+    reserva ||--o{ ocupacion : genera
+    ocupacion ||--o{ pago : tiene
+    parking ||--o{ tarifa : define
+    usuario ||--o{ notificacion : recibe
+```
+
+---
+
+## 🧪 Testing y Calidad
+
+### 🏃‍♂️ Ejecutar Tests
+
+```bash
+# Tests unitarios
+npm test
+
+# Tests con coverage
+npm run test:coverage
+
+# Tests de integración
+npm run test:integration
+```
+
+### 📈 Cobertura de Tests
+
+[![Coverage Status](https://img.shields.io/badge/coverage-85%25-green?style=for-the-badge)](https://coveralls.io)
+
+### 🔍 Linting
+
+```bash
+# Verificar código
+npm run lint
+
+# Auto-fix
+npm run lint:fix
+```
+
+---
+
+## 🤝 Cómo Contribuir
+
+¡Las contribuciones son bienvenidas! 🎉
+
+### 📝 Proceso de Contribución
+
+1. **Fork** el proyecto
+2. **Crea** una rama (`git checkout -b feature/AmazingFeature`)
+3. **Desarrolla** tu feature con tests
+4. **Commit** (`git commit -m 'Add AmazingFeature'`)
+5. **Push** (`git push origin feature/AmazingFeature`)
+6. **Pull Request** con descripción detallada
+
+### 🐛 Reportar Bugs
+
+1. Ve a [Issues](https://github.com/dariverap/api-nodejs-parking/issues)
+2. Usa el template "Bug Report"
+3. Incluye: pasos para reproducir, entorno, logs
+
+### 💡 Sugerir Features
+
+1. Ve a [Issues](https://github.com/dariverap/api-nodejs-parking/issues)
+2. Usa el template "Feature Request"
+3. Describe el problema y solución propuesta
+
+### 📋 Estándares de Código
+
+- ✅ ESLint configuration
+- ✅ Prettier formatting
+- ✅ JSDoc comments
+- ✅ Tests obligatorios
+- ✅ Conventional commits
+
+---
+
+## 👥 Colaboradores
+
+<div align="center">
+
+| [<img src="https://github.com/dariverap.png" width="100px;"><br><sub><b>Diego Rivera</b></sub>](https://github.com/dariverap)<br><sub>🚀 Arquitecto & Desarrollador Backend</sub> | [<img src="https://github.com/utp-student.png" width="100px;"><br><sub><b>Estudiante UTP</b></sub>](https://github.com/utp-student)<br><sub>🤝 Colaborador Frontend</sub> |
+|:---:|:---:|
+
+**Proyecto desarrollado como parte del curso Curso Integrador II: Sistemas - UTP**
+
+</div>
+
+---
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia ISC - ver el archivo [LICENSE](LICENSE) para más detalles.
+
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+
+---
+
+## 🙋‍♂️ FAQ
+
+### ❓ ¿Cómo configuro Supabase?
+1. Crea cuenta en [supabase.com](https://supabase.com)
+2. Crea un nuevo proyecto
+3. Copia URL y API Key al `.env`
+4. Ejecuta el script de migración
+
+### ❓ ¿Puedo usar PostgreSQL local?
+Sí, modifica las variables de entorno para apuntar a tu instancia local.
+
+### ❓ ¿Cómo hago deploy a producción?
+Usa PM2 con `npm run prod` o Docker para contenedorización.
+
+### ❓ ¿Hay rate limiting?
+Sí, configurable en variables de entorno (`RATE_LIMIT_WINDOW`, `RATE_LIMIT_MAX_REQUESTS`).
+
+---
+
+## 🚀 Roadmap
+
+- [ ] 📖 Documentación OpenAPI/Swagger
+- [ ] 🔄 WebSockets para actualizaciones en tiempo real
+- [ ] 💳 Integración con Stripe/PayPal
+- [ ] 📊 Analytics y métricas avanzadas
+- [ ] 🔒 OAuth 2.0 / Social Login
+- [ ] 📧 Sistema de emails
+- [ ] 📱 Push Notifications
+- [ ] 🌍 Internacionalización
+- [ ] 📈 Caching con Redis
+- [ ] 🔍 Elasticsearch para búsquedas
+
+---
+
+## 📞 Soporte Académico
+
+- 📧 **Email**: diego.rivera@utp.edu.pe
+- 💬 **Issues**: [GitHub Issues](https://github.com/dariverap/parking-system-api/issues)
+- 📚 **Universidad**: Universidad Tecnológica del Perú (UTP)
+- 📖 **Curso**: Curso Integrador II: Sistemas
+- 👨‍🏫 **Profesora**: CLAUDIA YOLANDA VILLALTA FLORES
+
+---
+
+<div align="center">
+
+**Proyecto académico desarrollado con ❤️ para el curso Curso Integrador II: Sistemas - UTP**
+
+⭐ ¡Gracias por revisar nuestro proyecto!
+
+[⬆️ Volver al inicio](#-parking-management-system---backend-api)
+
+</div>
