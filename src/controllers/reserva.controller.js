@@ -6,17 +6,79 @@ const Vehiculo = require('../models/vehiculo.model');
 const Notificacion = require('../models/notificacion.model');
 
 /**
- * Obtener todas las reservas
+ * Obtener todas las reservas (con filtros opcionales)
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
+ * Query params: id_parking, estado
  */
 const getAllReservas = async (req, res) => {
   try {
-    const reservas = await Reserva.getAll();
+    const { id_parking, estado } = req.query;
+    const supabase = require('../config/supabase');
+    
+    // Obtener reservas básicas primero
+    let query = supabase
+      .from('reserva')
+      .select('*')
+      .order('fecha_reserva', { ascending: false });
+    
+    // Aplicar filtro de estado
+    if (estado) {
+      query = query.eq('estado', estado);
+    }
+    
+    const { data: reservas, error } = await query;
+    
+    if (error) {
+      console.error('[Reservas] Error en query:', error);
+      throw error;
+    }
+    
+    if (!reservas || reservas.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
+    
+    // Enriquecer con datos de usuario, espacio, vehiculo manualmente
+    console.log(`[Reservas] Enriqueciendo ${reservas.length} reservas...`);
+    
+    const enrichedData = await Promise.all(
+      reservas.map(async (reserva) => {
+        const [usuario, espacio, vehiculo] = await Promise.all([
+          supabase.from('usuario').select('id_usuario,nombre,apellido,email,telefono').eq('id_usuario', reserva.id_usuario).single(),
+          supabase.from('espacio').select('id_espacio,numero_espacio,estado,id_parking').eq('id_espacio', reserva.id_espacio).single(),
+          reserva.id_vehiculo ? supabase.from('vehiculo').select('id_vehiculo,placa,marca,modelo,color').eq('id_vehiculo', reserva.id_vehiculo).single() : Promise.resolve({ data: null })
+        ]);
+        
+        console.log(`[Reservas] Reserva ${reserva.id_reserva}: usuario=${usuario.data?.nombre}, espacio=${espacio.data?.numero_espacio}, id_parking=${espacio.data?.id_parking}`);
+        
+        // Filtrar por parking si es necesario
+        if (id_parking && espacio.data?.id_parking !== parseInt(id_parking)) {
+          console.log(`[Reservas] Reserva ${reserva.id_reserva} filtrada (parking ${espacio.data?.id_parking} != ${id_parking})`);
+          return null;
+        }
+        
+        return {
+          ...reserva,
+          usuario: usuario.data,
+          espacio: espacio.data,
+          vehiculo: vehiculo.data
+        };
+      })
+    );
+    
+    const finalData = enrichedData.filter(Boolean);
+    
+    console.log(`[Reservas] Obtenidas ${finalData.length} reservas para parking ${id_parking}, estado: ${estado}`);
+    if (finalData.length > 0) {
+      console.log('[Reservas] Primera reserva completa:', JSON.stringify(finalData[0], null, 2));
+    }
     
     res.status(200).json({
       success: true,
-      data: reservas
+      data: finalData
     });
   } catch (error) {
     console.error('Error al obtener reservas:', error);

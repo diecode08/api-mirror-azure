@@ -145,106 +145,53 @@ const getOcupacionesActivas = async (req, res) => {
   console.log('\n🔍 getOcupacionesActivas - Parking:', id_parking);
 
   try {
-    if (!id_parking) {
-      return res.status(400).json({
-        success: false,
-        message: 'id_parking es requerido'
-      });
-    }
-
-    // Obtener ocupaciones con JOIN manual (simulando la consulta SQL)
-    const { data: ocupaciones, error } = await supabase
+    // Sintaxis correcta de Supabase para JOIN con objetos anidados
+    let query = supabase
       .from('ocupacion')
       .select(`
-        id_ocupacion,
-        hora_entrada,
-        hora_salida,
-        costo_total,
-        id_reserva,
-        id_usuario,
-        id_espacio,
-        id_vehiculo
+        *,
+        usuario:id_usuario (
+          id_usuario,
+          nombre,
+          apellido,
+          email,
+          telefono
+        ),
+        espacio:id_espacio (
+          id_espacio,
+          numero_espacio,
+          estado,
+          id_parking
+        ),
+        vehiculo:id_vehiculo (
+          id_vehiculo,
+          placa,
+          marca,
+          modelo,
+          color
+        )
       `)
       .is('hora_salida', null)
       .order('hora_entrada', { ascending: false });
 
-    if (error) throw error;
+    const { data, error } = await query;
 
-    // Enriquecer cada ocupación
-    const resultado = [];
-    for (const ocu of ocupaciones || []) {
-      // Obtener usuario
-      const { data: usuario } = await supabase
-        .from('usuario')
-        .select('nombre, apellido')
-        .eq('id_usuario', ocu.id_usuario)
-        .single();
-
-      // Obtener espacio
-      const { data: espacio } = await supabase
-        .from('espacio')
-        .select('numero_espacio, id_parking')
-        .eq('id_espacio', ocu.id_espacio)
-        .single();
-
-      // Filtrar por parking
-      if (espacio?.id_parking !== parseInt(id_parking)) continue;
-
-      // Obtener vehículo (COALESCE: primero de ocupación, luego de reserva)
-      let placa = null, marca = null, modelo = null, color = null;
-      
-      if (ocu.id_vehiculo) {
-        const { data: v } = await supabase
-          .from('vehiculo')
-          .select('placa, marca, modelo, color')
-          .eq('id_vehiculo', ocu.id_vehiculo)
-          .single();
-        if (v) {
-          placa = v.placa;
-          marca = v.marca;
-          modelo = v.modelo;
-          color = v.color;
-        }
-      } else if (ocu.id_reserva) {
-        const { data: reserva } = await supabase
-          .from('reserva')
-          .select('id_vehiculo')
-          .eq('id_reserva', ocu.id_reserva)
-          .single();
-        
-        if (reserva?.id_vehiculo) {
-          const { data: vr } = await supabase
-            .from('vehiculo')
-            .select('placa, marca, modelo, color')
-            .eq('id_vehiculo', reserva.id_vehiculo)
-            .single();
-          if (vr) {
-            placa = vr.placa;
-            marca = vr.marca;
-            modelo = vr.modelo;
-            color = vr.color;
-          }
-        }
-      }
-
-      resultado.push({
-        id_ocupacion: ocu.id_ocupacion,
-        hora_entrada: ocu.hora_entrada,
-        hora_salida: ocu.hora_salida,
-        costo_total: ocu.costo_total,
-        id_reserva: ocu.id_reserva,
-        nombre_usuario: usuario ? `${usuario.nombre} ${usuario.apellido}` : 'N/A',
-        numero_espacio: espacio?.numero_espacio || 'N/A',
-        placa: placa,
-        marca: marca,
-        modelo: modelo,
-        color: color
-      });
+    if (error) {
+      console.error('❌ Error en consulta:', error);
+      throw error;
     }
 
-    console.log('Total ocupaciones:', resultado.length);
+    console.log('� Total ocupaciones:', data?.length || 0);
+    
+    // Filtrar por parking si es necesario (en memoria porque el filtro anidado es complicado)
+    let resultado = data || [];
+    if (id_parking) {
+      resultado = resultado.filter(ocu => ocu.espacio?.id_parking === parseInt(id_parking));
+      console.log('📊 Después de filtrar por parking:', resultado.length);
+    }
+
     if (resultado.length > 0) {
-      console.log('Primera ocupacion:', JSON.stringify(resultado[0], null, 2));
+      console.log('📦 Primera ocupación:', JSON.stringify(resultado[0], null, 2));
     }
 
     return res.json({
