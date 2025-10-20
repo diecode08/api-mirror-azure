@@ -32,7 +32,22 @@ Ejecutar los scripts en el siguiente orden:
 - Triggers para actualización automática de estados
 - Funciones: `marcar_entrada_parking()`, `marcar_salida_parking()`
 - Vista: `vista_espacios_disponibles`
-- **Requerido:** Última migración (crítica para el funcionamiento)
+- **Requerido:** Crítica para el funcionamiento
+
+### 6️⃣ `007-fix-timezone.sql` ⚠️ **EJECUTAR ANTES DE 006**
+- Convierte todas las columnas `timestamp` a `timestamptz`
+- Soluciona problema de zonas horarias (Perú UTC-5)
+- Los valores existentes se interpretan como UTC
+- **CRÍTICO:** Ejecutar ANTES de la migración 006
+- **Backup recomendado** antes de ejecutar
+
+### 7️⃣ `006-pagos-salida-hibrido.sql`
+- Implementa flujo híbrido de salida y pago
+- Nuevas columnas: `hora_salida_solicitada`, `hora_salida_confirmada`, `monto_calculado`
+- Tabla `pago_comprobante` para auditoría
+- Trigger `trg_pago_completado_sync` para sincronización automática
+- Soporte para Yape/Plin/efectivo/simulado
+- **Requerido:** Después de 007 (zonas horarias)
 
 ## 🚀 Cómo Ejecutar
 
@@ -56,9 +71,28 @@ psql -h db.xxx.supabase.co -U postgres -d postgres -f 002-fix-vehiculo-rls-polic
 ## ⚠️ Importante
 
 - **NO** alterar el orden de ejecución
+- **CRÍTICO:** Ejecutar `007-fix-timezone.sql` ANTES de `006-pagos-salida-hibrido.sql`
 - **Verificar** que cada script se ejecute sin errores antes de continuar
-- **Hacer backup** antes de ejecutar en producción
+- **Hacer backup** antes de ejecutar en producción (especialmente 007)
 - Si un script falla, revisar el error y corregirlo antes de continuar
+
+## 🕒 Nota Importante sobre Zonas Horarias
+
+La migración `007-fix-timezone.sql` soluciona el problema de zonas horarias en Perú:
+- Convierte todas las columnas `timestamp without time zone` a `timestamptz`
+- Los timestamps se guardan internamente en UTC
+- Se presentan automáticamente en la zona local del cliente
+- El cálculo de diferencia de horas funciona correctamente entre días diferentes
+
+**Ejemplo:**
+```sql
+-- Antes (problema):
+hora_entrada: "2025-10-18 22:25:31" -- ambiguo, ¿UTC o Lima?
+
+-- Después (correcto):
+hora_entrada: "2025-10-18 22:25:31+00" -- claramente UTC
+-- Al mostrar en Perú: "2025-10-18 17:25:31-05" (automático)
+```
 
 ## 📝 Notas
 

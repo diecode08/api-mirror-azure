@@ -7,7 +7,7 @@ class Pago {
    */
   static async getAll() {
     const { data, error } = await supabase
-      .from('Pago')
+      .from('pago')
       .select('*');
     
     if (error) throw error;
@@ -21,7 +21,7 @@ class Pago {
    */
   static async getById(id) {
     const { data, error } = await supabase
-      .from('Pago')
+      .from('pago')
       .select('*')
       .eq('id_pago', id)
       .single();
@@ -37,7 +37,7 @@ class Pago {
    */
   static async getByOcupacionId(ocupacionId) {
     const { data, error } = await supabase
-      .from('Pago')
+      .from('pago')
       .select('*')
       .eq('id_ocupacion', ocupacionId);
     
@@ -52,7 +52,7 @@ class Pago {
    */
   static async create(pagoData) {
     const { data, error } = await supabase
-      .from('Pago')
+      .from('pago')
       .insert([pagoData])
       .select();
     
@@ -68,7 +68,7 @@ class Pago {
    */
   static async update(id, pagoData) {
     const { data, error } = await supabase
-      .from('Pago')
+      .from('pago')
       .update(pagoData)
       .eq('id_pago', id)
       .select();
@@ -94,7 +94,7 @@ class Pago {
    */
   static async delete(id) {
     const { error } = await supabase
-      .from('Pago')
+      .from('pago')
       .delete()
       .eq('id_pago', id);
     
