@@ -46,6 +46,30 @@ class Pago {
   }
 
   /**
+   * Obtener pagos por ID de parking
+   * @param {string} parkingId - ID del parking
+   * @returns {Promise<Array>} Lista de pagos del parking
+   */
+  static async getByParkingId(parkingId) {
+    const { data, error } = await supabase
+      .from('pago')
+      .select(`
+        *,
+        ocupacion:ocupacion!inner(
+          id_ocupacion,
+          espacio:espacio!inner(
+            id_espacio,
+            id_parking
+          )
+        )
+      `)
+      .eq('ocupacion.espacio.id_parking', parkingId);
+    
+    if (error) throw error;
+    return data;
+  }
+
+  /**
    * Crear un nuevo pago
    * @param {Object} pagoData - Datos del pago
    * @returns {Promise<Object>} Pago creado

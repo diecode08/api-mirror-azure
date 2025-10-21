@@ -142,8 +142,6 @@ const getOcupacionesActivas = async (req, res) => {
   const supabase = require('../config/supabase');
   const { id_parking } = req.query;
 
-  console.log('\n🔍 getOcupacionesActivas - Parking:', id_parking);
-
   try {
     if (!id_parking) {
       return res.status(400).json({
@@ -152,108 +150,39 @@ const getOcupacionesActivas = async (req, res) => {
       });
     }
 
-    // Obtener ocupaciones con JOIN manual (simulando la consulta SQL)
-    const { data: ocupaciones, error } = await supabase
-      .from('ocupacion')
-      .select(`
-        id_ocupacion,
-        hora_entrada,
-        hora_salida,
-        costo_total,
-        id_reserva,
-        id_usuario,
-        id_espacio,
-        id_vehiculo
-      `)
-      .is('hora_salida', null)
+    // Leer desde la vista optimizada con todos los campos necesarios
+    const { data, error } = await supabase
+      .from('vista_ocupaciones_activas')
+      .select('*')
+      .eq('id_parking', parseInt(id_parking))
       .order('hora_entrada', { ascending: false });
 
     if (error) throw error;
 
-    // Enriquecer cada ocupación
-    const resultado = [];
-    for (const ocu of ocupaciones || []) {
-      // Obtener usuario
-      const { data: usuario } = await supabase
-        .from('usuario')
-        .select('nombre, apellido')
-        .eq('id_usuario', ocu.id_usuario)
-        .single();
+    // Mapear a la forma esperada por el frontend web
+    const resultado = (data || []).map(v => ({
+      id_ocupacion: v.id_ocupacion,
+      id_reserva: v.id_reserva,
+      id_usuario: v.id_usuario,
+      id_espacio: v.id_espacio,
+      id_vehiculo: v.id_vehiculo,
+      hora_entrada: v.hora_entrada,
+      hora_salida: null,
+      hora_salida_solicitada: v.hora_salida_solicitada || null,
+      tiempo_total: v.tiempo_total_minutos || null,
+      monto_calculado: v.monto_calculado || null,
+      costo_total: v.costo_actual || null,
+      nombre_usuario: v.cliente || 'N/A',
+      numero_espacio: v.numero_espacio || 'N/A',
+      placa: v.vehiculo_placa || null,
+      marca: v.vehiculo_marca || null,
+      modelo: v.vehiculo_modelo || null,
+      color: v.vehiculo_color || null
+    }));
 
-      // Obtener espacio
-      const { data: espacio } = await supabase
-        .from('espacio')
-        .select('numero_espacio, id_parking')
-        .eq('id_espacio', ocu.id_espacio)
-        .single();
-
-      // Filtrar por parking
-      if (espacio?.id_parking !== parseInt(id_parking)) continue;
-
-      // Obtener vehículo (COALESCE: primero de ocupación, luego de reserva)
-      let placa = null, marca = null, modelo = null, color = null;
-      
-      if (ocu.id_vehiculo) {
-        const { data: v } = await supabase
-          .from('vehiculo')
-          .select('placa, marca, modelo, color')
-          .eq('id_vehiculo', ocu.id_vehiculo)
-          .single();
-        if (v) {
-          placa = v.placa;
-          marca = v.marca;
-          modelo = v.modelo;
-          color = v.color;
-        }
-      } else if (ocu.id_reserva) {
-        const { data: reserva } = await supabase
-          .from('reserva')
-          .select('id_vehiculo')
-          .eq('id_reserva', ocu.id_reserva)
-          .single();
-        
-        if (reserva?.id_vehiculo) {
-          const { data: vr } = await supabase
-            .from('vehiculo')
-            .select('placa, marca, modelo, color')
-            .eq('id_vehiculo', reserva.id_vehiculo)
-            .single();
-          if (vr) {
-            placa = vr.placa;
-            marca = vr.marca;
-            modelo = vr.modelo;
-            color = vr.color;
-          }
-        }
-      }
-
-      resultado.push({
-        id_ocupacion: ocu.id_ocupacion,
-        hora_entrada: ocu.hora_entrada,
-        hora_salida: ocu.hora_salida,
-        costo_total: ocu.costo_total,
-        id_reserva: ocu.id_reserva,
-        nombre_usuario: usuario ? `${usuario.nombre} ${usuario.apellido}` : 'N/A',
-        numero_espacio: espacio?.numero_espacio || 'N/A',
-        placa: placa,
-        marca: marca,
-        modelo: modelo,
-        color: color
-      });
-    }
-
-    console.log('Total ocupaciones:', resultado.length);
-    if (resultado.length > 0) {
-      console.log('Primera ocupacion:', JSON.stringify(resultado[0], null, 2));
-    }
-
-    return res.json({
-      success: true,
-      data: resultado
-    });
-
+    return res.json({ success: true, data: resultado });
   } catch (error) {
-    console.error('❌ ERROR:', error);
+    console.error('Error al obtener ocupaciones activas:', error);
     return res.status(500).json({
       success: false,
       message: 'Error al obtener ocupaciones activas',
@@ -313,7 +242,7 @@ const createOcupacion = async (req, res) => {
       });
     }
     
-    // Si se proporciona una reserva, verificar que exista y esté confirmada
+    // Si se proporciona una reserva, verificar que exista y esté activa
     let reserva = null;
     if (id_reserva) {
       reserva = await Reserva.getById(id_reserva);
@@ -324,10 +253,10 @@ const createOcupacion = async (req, res) => {
         });
       }
       
-      if (reserva.estado !== 'confirmada') {
+      if (reserva.estado !== 'activa') {
         return res.status(400).json({
           success: false,
-          message: 'La reserva no está confirmada'
+          message: 'La reserva no está activa'
         });
       }
       
@@ -353,9 +282,8 @@ const createOcupacion = async (req, res) => {
       id_espacio,
       id_vehiculo,
       id_reserva: id_reserva || null,
-      fecha_entrada,
-      fecha_salida: null,
-      estado: 'activa'
+      hora_entrada: fecha_entrada.toISOString(),
+      hora_salida: null
     };
     
     const nuevaOcupacion = await Ocupacion.create(ocupacionData);
@@ -363,10 +291,8 @@ const createOcupacion = async (req, res) => {
     // Actualizar estado del espacio a ocupado
     await Espacio.updateEstado(id_espacio, 'ocupado');
     
-    // Si hay reserva, actualizar su estado a completada
-    if (id_reserva) {
-      await Reserva.updateEstado(id_reserva, 'completada');
-    }
+    // Nota: No cambiamos el estado de la reserva aquí. Se completará cuando el pago sea validado
+    // mediante el trigger (fn_pago_completado_sync) que marca la reserva como 'completada'.
     
     // Obtener información del parking para la notificación
     const parking = await Parking.getById(espacio.id_parking);
@@ -442,6 +368,38 @@ const registrarSalida = async (req, res) => {
       });
     }
     
+    // Bloqueo por flujo híbrido: si ya se solicitó salida o existe pago pendiente, no permitir salida directa
+    try {
+      const supabase = require('../config/supabase');
+
+      // Si ya hay hora_salida_solicitada, forzar validación de pago por panel
+      if (existingOcupacion.hora_salida_solicitada) {
+        return res.status(409).json({
+          success: false,
+          message: 'La salida ya fue solicitada. Debe validarse el pago para finalizar.'
+        });
+      }
+
+      // Si existe un pago pendiente asociado a la ocupación, bloquear
+      const { data: pagoPendiente, error: pagoError } = await supabase
+        .from('pago')
+        .select('id_pago, estado')
+        .eq('id_ocupacion', id)
+        .in('estado', ['PENDIENTE', 'pendiente', 'pendiente_validacion'])
+        .order('id_pago', { ascending: false })
+        .limit(1);
+      if (pagoError) throw pagoError;
+      if (pagoPendiente && pagoPendiente.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Existe un pago pendiente. Valide el pago antes de registrar la salida.'
+        });
+      }
+    } catch (guardErr) {
+      console.warn('Advertencia al verificar pagos pendientes antes de salida:', guardErr?.message || guardErr);
+      // Continuar sólo si no hay evidencia de pago pendiente; no silencioso para errores graves
+    }
+
     // Calcular tiempo y monto
     const horaEntrada = new Date(existingOcupacion.hora_entrada);
     const horaSalida = new Date();
@@ -464,7 +422,7 @@ const registrarSalida = async (req, res) => {
       .from('ocupacion')
       .update({
         hora_salida: horaSalida.toISOString(),
-        tiempo_total: tiempoMinutos,
+        tiempo_total_minutos: tiempoMinutos,
         monto_calculado: parseFloat(monto.toFixed(2))
       })
       .eq('id_ocupacion', id)
@@ -484,7 +442,7 @@ const registrarSalida = async (req, res) => {
         id_usuario: existingOcupacion.id_usuario,
         monto: parseFloat(monto.toFixed(2)),
         metodo_pago: metodo_pago,
-        estado: 'completado',
+        estado: 'COMPLETADO',
         fecha_pago: horaSalida.toISOString()
       });
     }
@@ -598,17 +556,36 @@ const marcarEntrada = async (req, res) => {
       });
     }
     
-    if (reserva.id_usuario !== id_usuario) {
+    // Verificar permisos: propietario de la reserva O admin/empleado del parking
+    const espacio = await Espacio.getById(reserva.id_espacio);
+    if (!espacio) {
+      return res.status(404).json({
+        success: false,
+        message: 'Espacio no encontrado'
+      });
+    }
+
+    const parking = await Parking.getById(espacio.id_parking);
+    const esAdmin = req.user.rol === 'admin_general' || parking.id_admin === id_usuario;
+    
+    // Verificar si es empleado/admin del parking
+    let esEmpleado = false;
+    const UsuarioParking = require('../models/usuario_parking.model');
+    esEmpleado = await UsuarioParking.hasRole(id_usuario, parking.id_parking, ['admin_parking', 'empleado']);
+
+    // Nueva política: SOLO admin/empleado pueden marcar entrada. El cliente NO puede hacerlo.
+    if (!esAdmin && !esEmpleado) {
       return res.status(403).json({
         success: false,
-        message: 'Esta reserva no te pertenece'
+        message: 'Solo el personal del parking puede confirmar la entrada.'
       });
     }
     
-    if (reserva.estado !== 'pendiente') {
+    // Alinear estados: una reserva creada pasa a 'activa' y desde ese estado se permite marcar entrada
+    if (!['pendiente','confirmada','activa'].includes(reserva.estado)) {
       return res.status(400).json({
         success: false,
-        message: `La reserva ya está en estado: ${reserva.estado}`
+        message: `La reserva no está en un estado válido para marcar entrada (actual: ${reserva.estado})`
       });
     }
     
@@ -670,6 +647,35 @@ const marcarSalida = async (req, res) => {
       });
     }
     
+    // Bloqueo por flujo híbrido: si ya se solicitó salida o existe pago pendiente, no permitir salida directa
+    try {
+      const supabase = require('../config/supabase');
+
+      if (ocupacion.hora_salida_solicitada) {
+        return res.status(409).json({
+          success: false,
+          message: 'La salida ya fue solicitada. Espere la validación del pago.'
+        });
+      }
+
+      const { data: pagoPendiente, error: pagoError } = await supabase
+        .from('pago')
+        .select('id_pago, estado')
+        .eq('id_ocupacion', id_ocupacion)
+        .in('estado', ['PENDIENTE', 'pendiente', 'pendiente_validacion'])
+        .order('id_pago', { ascending: false })
+        .limit(1);
+      if (pagoError) throw pagoError;
+      if (pagoPendiente && pagoPendiente.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Existe un pago pendiente. Será finalizado cuando el pago sea validado.'
+        });
+      }
+    } catch (guardErr) {
+      console.warn('Advertencia al verificar pagos pendientes en marcarSalida:', guardErr?.message || guardErr);
+    }
+
     // Llamar a la función SQL marcar_salida_parking
     const result = await Ocupacion.marcarSalida(id_ocupacion);
     
@@ -748,6 +754,7 @@ const getHistorialOcupaciones = async (req, res) => {
 const confirmarEntrada = async (req, res) => {
   try {
     const { id_reserva } = req.body;
+    const supabase = require('../config/supabase');
     
     if (!id_reserva) {
       return res.status(400).json({
@@ -793,7 +800,6 @@ const confirmarEntrada = async (req, res) => {
     }
     
     // Verificar si ya existe una ocupación activa para esta reserva
-    const supabase = require('../config/supabase');
     const { data: ocupacionExistente } = await supabase
       .from('ocupacion')
       .select('*')
@@ -882,7 +888,7 @@ const calcularMonto = async (req, res) => {
         message: 'Esta ocupación ya tiene salida registrada',
         data: {
           monto: ocupacion.monto_calculado || 0,
-          tiempo_minutos: ocupacion.tiempo_total || 0
+          tiempo_minutos: ocupacion.tiempo_total_minutos || 0
         }
       });
     }
@@ -903,17 +909,18 @@ const calcularMonto = async (req, res) => {
       });
     }
     
+    // Obtener tarifa por hora del parking
+    const Tarifa = require('../models/tarifa.model');
+    const tarifas = await Tarifa.getByParkingId(espacio.id_parking);
+    const tarifaHora = tarifas.find(t => t.tipo.toLowerCase() === 'hora');
+    
     // Calcular monto
-    // Si tiene tarifa_hora, usarla; si no, usar tarifa_base como fija
     let monto = 0;
     
-    if (parking.tarifa_hora) {
+    if (tarifaHora) {
       // Cobrar por hora (redondear hacia arriba)
       const horas = Math.ceil(tiempoMinutos / 60);
-      monto = horas * parking.tarifa_hora;
-    } else if (parking.tarifa_base) {
-      // Tarifa fija
-      monto = parking.tarifa_base;
+      monto = horas * tarifaHora.monto;
     } else {
       // Sin tarifa configurada, cobrar S/. 5 por hora por defecto
       const horas = Math.ceil(tiempoMinutos / 60);
@@ -928,8 +935,7 @@ const calcularMonto = async (req, res) => {
         hora_entrada: ocupacion.hora_entrada,
         parking: {
           nombre: parking.nombre,
-          tarifa_hora: parking.tarifa_hora,
-          tarifa_base: parking.tarifa_base
+          tarifa_hora: tarifaHora ? tarifaHora.monto : null
         }
       }
     });
@@ -938,6 +944,212 @@ const calcularMonto = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error al calcular monto',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
+/**
+ * Marcar salida Y cobrar en 1 solo paso (flujo simplificado)
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const marcarSalidaConPago = async (req, res) => {
+  try {
+    const { id_ocupacion, id_metodo, monto_recibido, tipo_comprobante = 'boleta', es_simulado = false } = req.body;
+    const id_usuario_admin = req.user.id;
+
+    // Validaciones básicas
+    if (!id_ocupacion) {
+      return res.status(400).json({
+        success: false,
+        message: 'El ID de la ocupación es requerido'
+      });
+    }
+
+    if (!id_metodo) {
+      return res.status(400).json({
+        success: false,
+        message: 'El método de pago es requerido'
+      });
+    }
+
+    const supabase = require('../config/supabase');
+    const Pago = require('../models/pago.model');
+    const Espacio = require('../models/espacio.model');
+    const Reserva = require('../models/reserva.model');
+
+    // 1. Obtener ocupación
+    const ocupacion = await Ocupacion.getById(id_ocupacion);
+    if (!ocupacion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ocupación no encontrada'
+      });
+    }
+
+    // Verificar que no esté ya cerrada
+    if (ocupacion.hora_salida !== null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Esta ocupación ya tiene salida registrada'
+      });
+    }
+
+    // 2. Calcular monto y tiempo (usando tabla tarifa)
+    const entrada = new Date(ocupacion.hora_entrada);
+    const ahora = new Date();
+    const minutos = Math.max(1, Math.floor((ahora - entrada) / 60000));
+
+    // Obtener id_parking desde espacio
+    const { data: espacio } = await supabase
+      .from('espacio')
+      .select('id_parking')
+      .eq('id_espacio', ocupacion.id_espacio)
+      .single();
+
+    // Obtener tarifa por hora del parking desde la tabla tarifa
+    const Tarifa = require('../models/tarifa.model');
+    let montoCalculado = 0;
+    try {
+      const tarifas = await Tarifa.getByParkingId(espacio.id_parking);
+      const tarifaHora = tarifas?.find(t => String(t.tipo).toLowerCase() === 'hora');
+      const horas = Math.ceil(minutos / 60);
+      if (tarifaHora?.monto) {
+        montoCalculado = horas * Number(tarifaHora.monto);
+      } else {
+        // Fallback: S/. 5 por hora si no hay tarifa configurada
+        montoCalculado = horas * 5;
+      }
+    } catch (e) {
+      // Si falla la consulta a tarifas, aplicar fallback de S/. 5 por hora
+      const horas = Math.ceil(minutos / 60);
+      montoCalculado = horas * 5;
+    }
+
+    montoCalculado = Number(Number(montoCalculado).toFixed(2));
+
+    // 3. Obtener próximo número de comprobante
+    const { data: ultimoComprobante } = await supabase
+      .from('pago')
+      .select('numero')
+      .eq('tipo_comprobante', tipo_comprobante)
+      .order('numero', { ascending: false })
+      .limit(1);
+
+    const siguienteNumero = ultimoComprobante?.[0]?.numero ? ultimoComprobante[0].numero + 1 : 1;
+    const serie = tipo_comprobante === 'factura' ? 'F001' : 'B001';
+
+    // 4. TODO EN 1 TRANSACCIÓN: Crear pago + cerrar ocupación + liberar espacio + completar reserva
+    const ahora_iso = ahora.toISOString();
+
+    // 4a. Crear pago COMPLETADO directamente
+    const { data: pagoCreado, error: errorPago } = await supabase
+      .from('pago')
+      .insert({
+        id_ocupacion: id_ocupacion,
+        id_metodo: id_metodo,
+        monto: montoCalculado,
+        estado: 'COMPLETADO',
+        fecha_pago: ahora_iso,
+        es_simulado: es_simulado,
+        validado_por: id_usuario_admin,
+        validado_en: ahora_iso,
+        tipo_comprobante: tipo_comprobante,
+        serie: serie,
+        numero: siguienteNumero,
+        emitido_en: ahora_iso
+      })
+      .select()
+      .single();
+
+    if (errorPago) {
+      console.error('Error al crear pago:', errorPago);
+      return res.status(500).json({
+        success: false,
+        message: 'Error al registrar el pago'
+      });
+    }
+
+    // 4b. Cerrar ocupación
+    const { data: ocupacionActualizada, error: errorOcupacion } = await supabase
+      .from('ocupacion')
+      .update({
+        hora_salida: ahora_iso,
+        hora_salida_confirmada: ahora_iso,
+        tiempo_total_minutos: minutos,
+        monto_calculado: montoCalculado,
+        costo_total: montoCalculado,
+        estado: 'finalizada'
+      })
+      .eq('id_ocupacion', id_ocupacion)
+      .select()
+      .single();
+
+    if (errorOcupacion) {
+      console.error('Error al cerrar ocupación:', errorOcupacion);
+      // Rollback: eliminar pago
+      await supabase.from('pago').delete().eq('id_pago', pagoCreado.id_pago);
+      return res.status(500).json({
+        success: false,
+        message: 'Error al cerrar la ocupación'
+      });
+    }
+
+    // 4c. Liberar espacio
+    const { error: errorEspacio } = await supabase
+      .from('espacio')
+      .update({ estado: 'disponible' })
+      .eq('id_espacio', ocupacion.id_espacio);
+
+    if (errorEspacio) {
+      console.error('Error al liberar espacio:', errorEspacio);
+      // No hacemos rollback completo por esto, solo advertencia
+    }
+
+    // 4d. Completar reserva si existe
+    if (ocupacion.id_reserva) {
+      const { error: errorReserva } = await supabase
+        .from('reserva')
+        .update({ estado: 'completada' })
+        .eq('id_reserva', ocupacion.id_reserva);
+
+      if (errorReserva) {
+        console.error('Error al completar reserva:', errorReserva);
+        // No hacemos rollback completo por esto
+      }
+    }
+
+    // 5. Calcular vuelto si aplica (efectivo)
+    let vuelto = 0;
+    if (monto_recibido && monto_recibido > montoCalculado) {
+      vuelto = monto_recibido - montoCalculado;
+    }
+
+    // 6. Respuesta exitosa
+    res.status(200).json({
+      success: true,
+      message: 'Salida registrada y pago completado exitosamente',
+      data: {
+        id_pago: pagoCreado.id_pago,
+        monto_total: montoCalculado,
+        monto_recibido: monto_recibido || montoCalculado,
+        vuelto: vuelto,
+        tiempo_minutos: minutos,
+        comprobante: {
+          tipo: tipo_comprobante,
+          serie: serie,
+          numero: siguienteNumero
+        },
+        ocupacion: ocupacionActualizada
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en marcarSalidaConPago:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Error al procesar la salida con pago',
       error: process.env.NODE_ENV === 'development' ? error.message : {}
     });
   }
@@ -955,6 +1167,7 @@ module.exports = {
   // Nuevas funciones
   marcarEntrada,
   marcarSalida,
+  marcarSalidaConPago,
   getOcupacionActiva,
   getHistorialOcupaciones,
   confirmarEntrada,

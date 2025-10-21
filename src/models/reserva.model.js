@@ -67,16 +67,31 @@ class Reserva {
    * @param {Date} horaFin - Hora de fin
    * @returns {Promise<boolean>} true si está disponible, false si no
    */
-  static async verificarDisponibilidad(espacioId, horaInicio, horaFin) {
-    const { data, error } = await supabase
+  static async verificarDisponibilidad(espacioId, horaInicio, horaFin, excluirReservaId) {
+    // Normalizar fechas a ISO string
+    const inicioIso = (horaInicio instanceof Date) ? horaInicio.toISOString() : String(horaInicio);
+    const finIso = (horaFin instanceof Date) ? horaFin.toISOString() : String(horaFin);
+
+    // Regla de solapamiento correcta:
+    // Existe conflicto si: (reserva.hora_inicio < nueva_hora_fin) AND (reserva.hora_fin > nueva_hora_inicio)
+    // Considerar solo reservas que efectivamente bloquean el espacio: pendiente | confirmada | activa
+    let query = supabase
       .from('reserva')
-      .select('*')
+      .select('id_reserva, hora_inicio, hora_fin, estado')
       .eq('id_espacio', espacioId)
-      .or(`hora_inicio.lte.${horaFin},hora_fin.gte.${horaInicio}`)
-      .not('estado', 'eq', 'cancelada');
-    
+      .in('estado', ['pendiente','confirmada','activa'])
+      .lt('hora_inicio', finIso)
+      .gt('hora_fin', inicioIso);
+
+    if (excluirReservaId) {
+      query = query.neq('id_reserva', excluirReservaId);
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
-    return data.length === 0;
+    // Disponible si NO hay solapamientos
+    return (data || []).length === 0;
   }
 
   /**

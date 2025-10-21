@@ -20,7 +20,7 @@ const getAllReservas = async (req, res) => {
     let query = supabase
       .from('reserva')
       .select('*')
-      .order('fecha_reserva', { ascending: false });
+      .order('hora_inicio', { ascending: false });
     
     // Aplicar filtro de estado
     if (estado) {
@@ -129,9 +129,10 @@ const getReservaById = async (req, res) => {
 const getMisReservas = async (req, res) => {
   try {
     const id_usuario = req.user.id;
-    
+    const supabase = require('../config/supabase');
+
     // Obtener reservas con JOIN para traer datos completos
-    const { data, error } = await require('../config/supabase')
+    const { data, error } = await supabase
       .from('reserva')
       .select(`
         *,
@@ -156,13 +157,37 @@ const getMisReservas = async (req, res) => {
         )
       `)
       .eq('id_usuario', id_usuario)
-      .order('fecha_reserva', { ascending: false });
+      .order('hora_inicio', { ascending: false });
     
     if (error) throw error;
-    
+
+    // Corrección de estado visible: si existe una ocupación activa (hora_salida IS NULL)
+    // vinculada a la reserva, el estado debe considerarse 'activa'
+    let result = data || [];
+    if (result.length > 0) {
+      const ids = result.map(r => r.id_reserva);
+      const { data: ocupActivas, error: errOcu } = await supabase
+        .from('ocupacion')
+        .select('id_reserva')
+        .in('id_reserva', ids)
+        .is('hora_salida', null);
+
+      if (errOcu) {
+        console.warn('[MisReservas] No se pudo verificar ocupaciones activas:', errOcu.message);
+      } else if (ocupActivas) {
+        const activasSet = new Set(ocupActivas.map(o => o.id_reserva));
+        result = result.map(r => {
+          const tieneOcupacionActiva = activasSet.has(r.id_reserva);
+          const estadoVisible = tieneOcupacionActiva ? 'activa' : r.estado;
+          const puedeCancelar = !tieneOcupacionActiva && ['pendiente','confirmada'].includes(r.estado);
+          return { ...r, estado_visible: estadoVisible, tiene_ocupacion_activa: tieneOcupacionActiva, puede_cancelar: puedeCancelar };
+        });
+      }
+    }
+
     res.status(200).json({
       success: true,
-      data: data || []
+      data: result
     });
   } catch (error) {
     console.error('Error al obtener mis reservas:', error);
@@ -303,9 +328,9 @@ const createReserva = async (req, res) => {
       });
     }
     
-    // Verificar si el usuario ya tiene una reserva activa
-    const reservasActivas = await Reserva.getByUserId(id_usuario);
-    const tieneReservaActiva = reservasActivas.some(r => r.estado === 'activa');
+  // Verificar si el usuario ya tiene una reserva en curso (pendiente|confirmada|activa)
+  const reservasActivas = await Reserva.getByUserId(id_usuario);
+  const tieneReservaActiva = reservasActivas.some(r => ['pendiente','confirmada','activa'].includes(r.estado));
     
     if (tieneReservaActiva) {
       return res.status(400).json({
@@ -356,7 +381,7 @@ const createReserva = async (req, res) => {
       });
     }
     
-    // Crear reserva (estado 'activa' porque ya está confirmada)
+    // Crear reserva (estado inicial 'pendiente')
     // IMPORTANTE: Las columnas en la BD son hora_inicio y hora_fin, no fecha_inicio y fecha_fin
     const reservaData = {
       id_usuario,
@@ -364,10 +389,13 @@ const createReserva = async (req, res) => {
       id_vehiculo,
       hora_inicio: fecha_inicio,  // Mapear fecha_inicio -> hora_inicio
       hora_fin: fecha_fin,         // Mapear fecha_fin -> hora_fin
-      estado: 'activa'
+      estado: 'pendiente'
     };
     
     const nuevaReserva = await Reserva.create(reservaData);
+    
+    // Cambiar estado del espacio a 'reservado'
+    await Espacio.updateEstado(id_espacio, 'reservado');
     
     // Obtener información del parking para la notificación
     const parking = await Parking.getById(espacio.id_parking);
@@ -410,8 +438,8 @@ const createReserva = async (req, res) => {
  */
 const updateReserva = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { id_vehiculo, fecha_inicio, fecha_fin } = req.body;
+  const { id } = req.params;
+  const { id_vehiculo, fecha_inicio, fecha_fin, hora_inicio, hora_fin } = req.body;
     
     // Verificar si la reserva existe
     const existingReserva = await Reserva.getById(id);
@@ -462,15 +490,19 @@ const updateReserva = async (req, res) => {
     }
     
     // Si se cambian las fechas, verificar disponibilidad
-    if (fecha_inicio || fecha_fin) {
-      const nuevaFechaInicio = fecha_inicio || existingReserva.fecha_inicio;
-      const nuevaFechaFin = fecha_fin || existingReserva.fecha_fin;
+    // Permitir actualizar usando alias fecha_* o nombres correctos hora_*
+    const newHoraInicio = hora_inicio || fecha_inicio;
+    const newHoraFin = hora_fin || fecha_fin;
+
+    if (newHoraInicio || newHoraFin) {
+      const nuevaHoraInicio = newHoraInicio || existingReserva.hora_inicio;
+      const nuevaHoraFin = newHoraFin || existingReserva.hora_fin;
       
       // Verificar disponibilidad excluyendo la reserva actual
       const disponible = await Reserva.verificarDisponibilidad(
         existingReserva.id_espacio,
-        nuevaFechaInicio,
-        nuevaFechaFin,
+        nuevaHoraInicio,
+        nuevaHoraFin,
         id
       );
       
@@ -481,8 +513,8 @@ const updateReserva = async (req, res) => {
         });
       }
       
-      if (fecha_inicio) reservaData.fecha_inicio = fecha_inicio;
-      if (fecha_fin) reservaData.fecha_fin = fecha_fin;
+      if (newHoraInicio) reservaData.hora_inicio = newHoraInicio;
+      if (newHoraFin) reservaData.hora_fin = newHoraFin;
     }
     
     // Si no hay cambios, retornar la reserva sin modificar
@@ -621,6 +653,36 @@ const updateEstadoReserva = async (req, res) => {
 };
 
 /**
+ * Aceptar una reserva (opcional en operación)
+ * Cambia estado a 'confirmada'
+ */
+const aceptarReserva = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existingReserva = await Reserva.getById(id);
+    if (!existingReserva) {
+      return res.status(404).json({ success: false, message: 'Reserva no encontrada' });
+    }
+
+    // Permisos: propietario o admin_general (se puede refinar a admin del parking)
+    if (existingReserva.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
+      return res.status(403).json({ success: false, message: 'No tiene permisos para aceptar esta reserva' });
+    }
+
+    if (!['pendiente'].includes(existingReserva.estado)) {
+      return res.status(400).json({ success: false, message: `No se puede aceptar una reserva en estado ${existingReserva.estado}` });
+    }
+
+    const updated = await Reserva.updateEstado(id, 'confirmada');
+    return res.status(200).json({ success: true, message: 'Reserva aceptada', data: updated });
+  } catch (error) {
+    console.error('Error al aceptar reserva:', error);
+    return res.status(500).json({ success: false, message: 'Error al aceptar reserva', error: process.env.NODE_ENV === 'development' ? error.message : {} });
+  }
+};
+
+/**
  * Eliminar una reserva
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
@@ -695,5 +757,6 @@ module.exports = {
   createReserva,
   updateReserva,
   updateEstadoReserva,
+  aceptarReserva,
   deleteReserva
 };

@@ -16,6 +16,7 @@ router.get('/historial', verifyToken, ocupacionController.getHistorialOcupacione
 // Nuevas rutas para admin del parking (dashboard web)
 router.post('/entrada', verifyToken, ocupacionController.confirmarEntrada); // Confirmar entrada desde reserva
 router.get('/:id/calcular-monto', verifyToken, ocupacionController.calcularMonto); // Calcular monto antes de salida
+router.post('/marcar-salida-con-pago', verifyToken, ocupacionController.marcarSalidaConPago); // NUEVO: Marcar salida + cobrar en 1 paso
 
 // Rutas existentes
 router.get('/:id', verifyToken, ocupacionController.getOcupacionById);

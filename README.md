@@ -117,7 +117,7 @@ Crea un archivo `.env` en la raíz del proyecto:
 
 ```env
 # Puerto del servidor
-PORT=3001
+PORT=3000
 
 # Base de datos Supabase
 SUPABASE_URL=https://tu-proyecto.supabase.co

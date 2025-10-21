@@ -30,7 +30,9 @@ Ejecutar los scripts en el siguiente orden:
 - Sistema de estados automáticos para espacios
 - ENUM: `disponible`, `reservado`, `ocupado`, `deshabilitado`
 - Triggers para actualización automática de estados
-- Funciones: `marcar_entrada_parking()`, `marcar_salida_parking()`
+-- Funciones: `marcar_entrada_parking()`, `marcar_salida_parking()`
+-- Nota: En flujo híbrido, `marcar_salida_parking` SOLO registra la solicitud de salida y calcula monto;
+-- el cierre de ocupación y completar la reserva ocurre cuando el pago cambia a COMPLETADO (trigger fn_pago_completado_sync)
 - Vista: `vista_espacios_disponibles`
 - **Requerido:** Crítica para el funcionamiento
 

@@ -189,14 +189,17 @@ class Ocupacion {
    * @returns {Promise<Object|null>} Ocupación activa o null
    */
   static async getActivaByUserId(id_usuario) {
+    // Puede haber múltiples ocupaciones "activas" por datos huérfanos.
+    // Elegimos la más reciente por hora_entrada para el usuario.
     const { data, error } = await supabase
       .from('vista_ocupaciones_activas')
       .select('*')
       .eq('id_usuario', id_usuario)
-      .single();
-    
-    // PGRST116 = no rows found
-    if (error && error.code !== 'PGRST116') throw error;
+      .order('hora_entrada', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
     return data || null;
   }
 

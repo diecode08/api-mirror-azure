@@ -4,12 +4,24 @@ const Notificacion = require('../models/notificacion.model');
 const Usuario = require('../models/usuario.model');
 
 /**
- * Obtener todos los pagos
+ * Obtener todos los pagos (con filtro opcional por parking)
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
  */
 const getAllPagos = async (req, res) => {
   try {
+    const { id_parking } = req.query;
+    
+    // Si se especifica id_parking, filtrar por ese parking
+    if (id_parking) {
+      const pagos = await Pago.getByParkingId(id_parking);
+      return res.status(200).json({
+        success: true,
+        data: pagos
+      });
+    }
+    
+    // Si no, devolver todos
     const pagos = await Pago.getAll();
     
     res.status(200).json({

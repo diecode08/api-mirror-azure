@@ -13,6 +13,7 @@ router.post('/verificar-disponibilidad', verifyToken, reservaController.verifica
 router.post('/', verifyToken, reservaController.createReserva);
 router.put('/:id', verifyToken, reservaController.updateReserva);
 router.patch('/:id/estado', verifyToken, reservaController.updateEstadoReserva);
+router.patch('/:id/aceptar', verifyToken, reservaController.aceptarReserva);
 router.delete('/:id', verifyToken, reservaController.deleteReserva);
 
 module.exports = router;
