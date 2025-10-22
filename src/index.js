@@ -14,6 +14,7 @@ const ocupacionRoutes = require('./routes/ocupacion.routes');
 const metodoPagoRoutes = require('./routes/metodoPago.routes');
 const pagoRoutes = require('./routes/pago.routes');
 const notificacionRoutes = require('./routes/notificacion.routes');
+const historialRoutes = require('./routes/historial.routes');
 
 // Inicializar app
 const app = express();
@@ -51,6 +52,7 @@ app.use('/api/ocupaciones', ocupacionRoutes);
 app.use('/api/metodos-pago', metodoPagoRoutes);
 app.use('/api/pagos', pagoRoutes);
 app.use('/api/notificaciones', notificacionRoutes);
+app.use('/api/historial', historialRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

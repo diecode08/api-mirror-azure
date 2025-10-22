@@ -242,6 +242,20 @@ class Ocupacion {
         espacio!inner(
           id_parking,
           numero_espacio
+        ),
+        usuario:id_usuario(
+          id_usuario,
+          nombre,
+          apellido,
+          email,
+          telefono
+        ),
+        vehiculo:id_vehiculo(
+          id_vehiculo,
+          placa,
+          marca,
+          modelo,
+          color
         )
       `)
       .eq('espacio.id_parking', id_parking)
@@ -256,7 +270,12 @@ class Ocupacion {
     return (data || []).map(item => ({
       ...item,
       tiempo_total: item.tiempo_total_minutos,
-      numero_espacio: item.espacio?.numero_espacio
+      numero_espacio: item.espacio?.numero_espacio,
+      nombre_usuario: item.usuario ? `${item.usuario.nombre || ''} ${item.usuario.apellido || ''}`.trim() : undefined,
+      placa: item.vehiculo?.placa,
+      marca: item.vehiculo?.marca,
+      modelo: item.vehiculo?.modelo,
+      color: item.vehiculo?.color
     }));
   }
 }
