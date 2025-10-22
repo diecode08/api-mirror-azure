@@ -424,7 +424,7 @@ Este proyecto está bajo la Licencia ISC - ver el archivo [LICENSE](LICENSE) par
 1. Crea cuenta en [supabase.com](https://supabase.com)
 2. Crea un nuevo proyecto
 3. Copia URL y API Key al `.env`
-4. Ejecuta el script de migración
+4. Ejecuta el script de migración 
 
 ### ❓ ¿Puedo usar PostgreSQL local?
 Sí, modifica las variables de entorno para apuntar a tu instancia local.
