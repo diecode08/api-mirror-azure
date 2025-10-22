@@ -220,6 +220,45 @@ class Ocupacion {
     if (error) throw error;
     return data;
   }
+
+  /**
+   * Obtener historial de ocupaciones de un parking (finalizadas)
+   * @param {string} id_parking - ID del parking
+   * @param {number} limit - Límite de resultados
+   * @returns {Promise<Array>} Historial de ocupaciones con tiempo_total
+   */
+  static async getHistorialByParkingId(id_parking, limit = 100) {
+    const { data, error } = await supabase
+      .from('ocupacion')
+      .select(`
+        id_ocupacion,
+        id_usuario,
+        id_espacio,
+        id_vehiculo,
+        hora_entrada,
+        hora_salida,
+        tiempo_total_minutos,
+        monto_calculado,
+        espacio!inner(
+          id_parking,
+          numero_espacio
+        )
+      `)
+      .eq('espacio.id_parking', id_parking)
+      .not('hora_salida', 'is', null)
+      .not('tiempo_total_minutos', 'is', null)
+      .order('hora_salida', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    
+    // Mapear para aplanar el objeto y renombrar tiempo_total_minutos a tiempo_total
+    return (data || []).map(item => ({
+      ...item,
+      tiempo_total: item.tiempo_total_minutos,
+      numero_espacio: item.espacio?.numero_espacio
+    }));
+  }
 }
 
 module.exports = Ocupacion;

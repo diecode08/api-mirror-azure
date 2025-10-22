@@ -720,16 +720,26 @@ const getOcupacionActiva = async (req, res) => {
 };
 
 /**
- * Obtener historial de ocupaciones del usuario autenticado
+ * Obtener historial de ocupaciones del usuario autenticado O de un parking específico
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
+ * Query params: id_parking (opcional) - si se provee, retorna historial del parking
  */
 const getHistorialOcupaciones = async (req, res) => {
   try {
-    const id_usuario = req.user.id;
+    const { id_parking } = req.query;
     const limit = parseInt(req.query.limit) || 50;
     
-    const historial = await Ocupacion.getHistorialByUserId(id_usuario, limit);
+    let historial;
+    
+    // Si se especifica id_parking, obtener historial del parking
+    if (id_parking) {
+      historial = await Ocupacion.getHistorialByParkingId(id_parking, limit);
+    } else {
+      // Si no, obtener historial del usuario autenticado
+      const id_usuario = req.user.id;
+      historial = await Ocupacion.getHistorialByUserId(id_usuario, limit);
+    }
     
     res.status(200).json({
       success: true,
