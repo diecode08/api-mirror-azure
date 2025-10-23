@@ -432,7 +432,7 @@ Sí, modifica las variables de entorno para apuntar a tu instancia local.
 ### ❓ ¿Cómo hago deploy a producción?
 Usa PM2 con `npm run prod` o Docker para contenedorización.
 
-### ❓ ¿Hay rate limiting? 
+### ❓ ¿Hay rate limiting?
 Sí, configurable en variables de entorno (` RATE_LIMIT_WINDOW`, `RATE_LIMIT_MAX_REQUESTS`).
 
 ---
