@@ -1,7 +1,7 @@
 name: Sync from api-nodejs-parking
 
 on:
-  workflow_dispatch:  # Permite ejecutarlo manualmente
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -19,26 +19,47 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
       
-      - name: Agregar repositorio origen
+      - name: Ver estado actual
         run: |
-          git remote add source https://github.com/dariverap/api-nodejs-parking.git || true
+          echo "=== Último commit en api-mirror-azure ==="
+          git log -1 --oneline
+      
+      - name: Agregar repositorio origen y fetch
+        run: |
+          git remote add source https://github.com/dariverap/api-nodejs-parking.git
           git fetch source main
+          echo "=== Último commit en api-nodejs-parking ==="
+          git log source/main -1 --oneline
       
       - name: Hacer backup de workflows
         run: |
           mkdir -p /tmp/workflows-backup
-          cp -r .github/workflows/* /tmp/workflows-backup/ 2>/dev/null || true
+          if [ -d ".github/workflows" ]; then
+            cp -r .github/workflows/* /tmp/workflows-backup/
+            echo "✓ Backup de workflows creado"
+          fi
       
-      - name: Sincronizar cambios (excepto workflows)
+      - name: Sincronizar cambios
         run: |
-          git merge source/main -m "Sync from api-nodejs-parking" --allow-unrelated-histories -X theirs || echo "Ya está actualizado"
+          echo "=== Iniciando merge ==="
+          git merge source/main -m "Sync from api-nodejs-parking" --allow-unrelated-histories -X theirs
+          echo "✓ Merge completado"
       
       - name: Restaurar workflows de Azure
         run: |
-          cp -r /tmp/workflows-backup/* .github/workflows/
-          git add .github/workflows/
-          git commit -m "Mantener workflows de Azure" || true
+          if [ -d "/tmp/workflows-backup" ] && [ "$(ls -A /tmp/workflows-backup)" ]; then
+            cp -r /tmp/workflows-backup/* .github/workflows/
+            git add .github/workflows/
+            if ! git diff --staged --quiet; then
+              git commit -m "Mantener workflows de Azure"
+              echo "✓ Workflows restaurados"
+            else
+              echo "✓ Workflows sin cambios"
+            fi
+          fi
       
       - name: Push cambios
         run: |
-          git push origin main || echo "No hay cambios nuevos"
+          git push origin main
+          echo "✓ Sincronización completada"
+          git log -1 --oneline
