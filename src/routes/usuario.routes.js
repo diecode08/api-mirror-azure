@@ -10,6 +10,8 @@ router.post('/empleados', verifyToken, hasRole(['admin_general']), usuarioContro
 router.delete('/empleados/:id', verifyToken, hasRole(['admin_general']), usuarioController.deleteEmpleado);
 router.get('/administradores-disponibles', verifyToken, hasRole(['admin_general']), usuarioController.getAdministradoresDisponibles);
 router.get('/rol/:rol', verifyToken, hasRole(['admin_general']), usuarioController.getUsuariosByRol);
+// Historial por usuario (propietario o admin_general) - declarar ANTES de la ruta generica :id
+router.get('/:id/historial', verifyToken, usuarioController.getHistorialUsuario);
 router.get('/:id', verifyToken, usuarioController.getUsuarioById);
 router.put('/:id', verifyToken, usuarioController.updateUsuario);
 router.delete('/:id', verifyToken, hasRole(['admin_general']), usuarioController.deleteUsuario);
