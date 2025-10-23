@@ -1,8 +1,6 @@
 name: Sync from api-nodejs-parking
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # Cada 1 hora
   workflow_dispatch:  # Permite ejecutarlo manualmente
 
 jobs:
