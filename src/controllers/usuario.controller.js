@@ -1,6 +1,7 @@
 const Usuario = require('../models/usuario.model');
 const supabase = require('../config/supabase');
 const UsuarioParking = require('../models/usuario_parking.model');
+const Historial = require('../models/historial.model');
 
 /**
  * Obtener todos los usuarios
@@ -593,5 +594,45 @@ module.exports = {
   getAdministradoresDisponibles,
   getScopedEmployees,
   createEmpleado,
-  deleteEmpleado
+  deleteEmpleado,
+  /**
+   * Obtener historial unificado por usuario (para app móvil)
+   * GET /usuarios/:id/historial?estado=&fecha_desde=&fecha_hasta=&q=&limit=
+   * Solo el propio usuario o admin_general pueden acceder.
+   */
+  async getHistorialUsuario(req, res) {
+    try {
+      const { id } = req.params;
+      const requester = req.user; // contiene id y rol desde el JWT
+
+      console.log('[getHistorialUsuario] Inicio - id:', id, 'requester:', requester?.id);
+
+      if (!requester) {
+        console.warn('[getHistorialUsuario] No hay requester autenticado');
+        return res.status(401).json({ success: false, message: 'No autenticado' });
+      }
+
+      if (requester.id !== id && requester.rol !== 'admin_general') {
+        console.warn('[getHistorialUsuario] Sin permisos - requester.id:', requester.id, 'id solicitado:', id);
+        return res.status(403).json({ success: false, message: 'Sin permisos' });
+      }
+
+      const { estado, fecha_desde, fecha_hasta, q, limit } = req.query;
+      const filters = {};
+      if (estado) filters.estado = estado;
+      if (fecha_desde) filters.fecha_desde = fecha_desde;
+      if (fecha_hasta) filters.fecha_hasta = fecha_hasta;
+      if (q) filters.q = q;
+      if (limit) filters.limit = parseInt(limit, 10);
+
+      console.log('[getHistorialUsuario] Llamando modelo con filtros:', filters);
+      const data = await Historial.getOperacionesByUsuarioId(id, filters);
+      console.log('[getHistorialUsuario] Operaciones encontradas:', data?.length);
+      
+      return res.status(200).json({ success: true, data });
+    } catch (e) {
+      console.error('[getHistorialUsuario] Error:', e);
+      return res.status(500).json({ success: false, message: 'Error al obtener historial', error: process.env.NODE_ENV === 'development' ? e.message : {} });
+    }
+  }
 };

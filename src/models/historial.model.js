@@ -312,6 +312,305 @@ class Historial {
 
     return operaciones;
   }
+
+  /**
+   * Obtener historial de operaciones unificado de un usuario
+   * Combina reservas del usuario, ocupaciones (con y sin reserva) y pagos asociados
+   * @param {string} id_usuario - ID del usuario
+   * @param {Object} filters - Filtros opcionales { estado, fecha_desde, fecha_hasta, q, limit }
+   * @returns {Promise<Array>} Lista de operaciones
+   */
+  static async getOperacionesByUsuarioId(id_usuario, filters = {}) {
+    const { estado, fecha_desde, fecha_hasta, q, limit = 100 } = filters;
+
+    // 1. Reservas del usuario
+    let queryReservas = supabase
+      .from('reserva')
+      .select(`
+        id_reserva,
+        id_usuario,
+        id_espacio,
+        id_vehiculo,
+        hora_inicio,
+        hora_fin,
+        estado,
+        fecha_reserva,
+        usuario:id_usuario(
+          id_usuario,
+          nombre,
+          apellido,
+          email,
+          telefono
+        ),
+        espacio:id_espacio(
+          id_espacio,
+          numero_espacio,
+          id_parking
+        ),
+        vehiculo:id_vehiculo(
+          id_vehiculo,
+          placa,
+          marca,
+          modelo,
+          color
+        )
+      `)
+      .eq('id_usuario', id_usuario)
+      .order('fecha_reserva', { ascending: false });
+
+    if (estado) {
+      // filtro preliminar: si se pide un estado directo de reserva, se aplicará más abajo con estado_final
+    }
+
+    const { data: reservas, error: errRes } = await queryReservas.limit(limit);
+    if (errRes) throw errRes;
+
+    // 2. Ocupaciones del usuario (incluye con y sin reserva)
+    let queryOcupaciones = supabase
+      .from('ocupacion')
+      .select(`
+        id_ocupacion,
+        id_reserva,
+        id_usuario,
+        id_espacio,
+        id_vehiculo,
+        hora_entrada,
+        hora_salida,
+        tiempo_total_minutos,
+        monto_calculado,
+        espacio(
+          id_espacio,
+          numero_espacio,
+          id_parking
+        ),
+        usuario:id_usuario(
+          id_usuario,
+          nombre,
+          apellido,
+          email,
+          telefono
+        ),
+        vehiculo:id_vehiculo(
+          id_vehiculo,
+          placa,
+          marca,
+          modelo,
+          color
+        )
+      `)
+      .eq('id_usuario', id_usuario)
+      .order('hora_salida', { ascending: false, nullsFirst: false });
+
+    const { data: ocupaciones, error: errOc } = await queryOcupaciones.limit(limit);
+    if (errOc) throw errOc;
+
+    // 3. Pagos de las ocupaciones del usuario (recortar por ids para eficiencia)
+    const ocupIds = Array.from(new Set((ocupaciones || []).map(o => o.id_ocupacion)));
+    let pagosByOcupacion = new Map();
+    if (ocupIds.length > 0) {
+      const { data: pagos, error: errPago } = await supabase
+        .from('pago')
+        .select(`
+          id_pago,
+          id_ocupacion,
+          monto,
+          estado,
+          fecha_pago,
+          emitido_en,
+          tipo_comprobante,
+          serie,
+          numero,
+          id_metodo,
+          metodo_pago:id_metodo(
+            id_metodo,
+            nombre
+          )
+        `)
+        .in('id_ocupacion', ocupIds);
+      if (errPago) throw errPago;
+
+      pagosByOcupacion = new Map();
+      (pagos || []).forEach(p => {
+        const key = String(p.id_ocupacion);
+        const arr = pagosByOcupacion.get(key) || [];
+        arr.push(p);
+        pagosByOcupacion.set(key, arr);
+      });
+    }
+
+    // 4. Indexar ocupaciones por reserva y detectar walk-ins
+    const ocupByReserva = new Map();
+    const ocupWalkIn = [];
+    (ocupaciones || []).forEach(o => {
+      if (o.id_reserva) {
+        const arr = ocupByReserva.get(o.id_reserva) || [];
+        arr.push(o);
+        ocupByReserva.set(o.id_reserva, arr);
+      } else {
+        ocupWalkIn.push(o);
+      }
+    });
+
+    const operaciones = [];
+
+    // 5. Construir operaciones desde reservas del usuario
+    for (const r of reservas || []) {
+      const ocs = ocupByReserva.get(r.id_reserva) || [];
+      const oc = ocs.sort((a,b) => new Date(b.hora_entrada).getTime() - new Date(a.hora_entrada).getTime())[0];
+      const pagosOc = oc ? pagosByOcupacion.get(String(oc.id_ocupacion)) || [] : [];
+      const pagoCompleto = pagosOc.find(p => String(p.estado).toUpperCase() === 'COMPLETADO');
+
+      let estado_final = r.estado;
+      if (oc && oc.hora_salida) {
+        estado_final = pagoCompleto ? 'finalizada_pagada' : 'finalizada';
+      }
+
+      // Filtro estado
+      if (estado && estado_final !== estado) continue;
+
+      // Filtro búsqueda
+      if (q) {
+        const txt = `${r.usuario?.nombre || ''} ${r.usuario?.apellido || ''} ${r.usuario?.email || ''} ${r.vehiculo?.placa || ''} ${r.espacio?.numero_espacio || ''}`.toLowerCase();
+        if (!txt.includes(q.toLowerCase())) continue;
+      }
+
+      // Filtro fechas
+      const baseFecha = (pagoCompleto?.fecha_pago || pagoCompleto?.emitido_en || oc?.hora_salida || oc?.hora_entrada || r.hora_inicio || r.fecha_reserva || '').slice(0,10);
+      if (fecha_desde && baseFecha < fecha_desde) continue;
+      if (fecha_hasta && baseFecha > fecha_hasta) continue;
+
+      const op = {
+        id_operacion: `res-${r.id_reserva}`,
+        id_reserva: r.id_reserva,
+        id_ocupacion: oc?.id_ocupacion,
+        tipo: 'reserva',
+        estado_final,
+        usuario: r.usuario ? {
+          id_usuario: r.usuario.id_usuario,
+          nombre: r.usuario.nombre,
+          apellido: r.usuario.apellido,
+          email: r.usuario.email,
+          telefono: r.usuario.telefono
+        } : null,
+        vehiculo: r.vehiculo ? {
+          id_vehiculo: r.vehiculo.id_vehiculo,
+          placa: r.vehiculo.placa,
+          marca: r.vehiculo.marca,
+          modelo: r.vehiculo.modelo,
+          color: r.vehiculo.color
+        } : null,
+        espacio: r.espacio ? {
+          id_espacio: r.espacio.id_espacio,
+          numero_espacio: r.espacio.numero_espacio,
+          id_parking: r.espacio.id_parking
+        } : null,
+        fechas: {
+          creada_at: r.fecha_reserva || null,
+          hora_programada_inicio: r.hora_inicio || null,
+          hora_programada_fin: r.hora_fin || null,
+          entrada_at: oc?.hora_entrada || null,
+          salida_at: oc?.hora_salida || null,
+          pago_at: pagoCompleto?.fecha_pago || pagoCompleto?.emitido_en || null
+        },
+        duracion_minutos: oc?.tiempo_total_minutos || null,
+        pago: pagoCompleto ? {
+          id_pago: pagoCompleto.id_pago,
+          monto: pagoCompleto.monto,
+          estado: pagoCompleto.estado,
+          metodo: pagoCompleto.metodo_pago?.nombre || null,
+          metodo_tipo: Historial.inferirTipoMetodo(pagoCompleto.metodo_pago?.nombre),
+          comprobante: {
+            tipo: pagoCompleto.tipo_comprobante || null,
+            serie: pagoCompleto.serie || null,
+            numero: pagoCompleto.numero || null,
+            emitido_en: pagoCompleto.emitido_en || pagoCompleto.fecha_pago || null
+          }
+        } : null
+      };
+
+      operaciones.push(op);
+    }
+
+    // 6. Construir operaciones desde walk-ins (ocupaciones del usuario sin reserva)
+    for (const oc of ocupWalkIn) {
+      const pagosOc = pagosByOcupacion.get(String(oc.id_ocupacion)) || [];
+      const pagoCompleto = pagosOc.find(p => String(p.estado).toUpperCase() === 'COMPLETADO');
+
+      const estado_final = oc.hora_salida
+        ? (pagoCompleto ? 'finalizada_pagada' : 'finalizada')
+        : 'activa';
+
+      if (estado && estado_final !== estado) continue;
+
+      if (q) {
+        const txt = `${oc.usuario?.nombre || ''} ${oc.usuario?.apellido || ''} ${oc.vehiculo?.placa || ''} ${oc.espacio?.numero_espacio || ''}`.toLowerCase();
+        if (!txt.includes(q.toLowerCase())) continue;
+      }
+
+      const baseFecha = (pagoCompleto?.fecha_pago || oc.hora_salida || oc.hora_entrada || '').slice(0,10);
+      if (fecha_desde && baseFecha < fecha_desde) continue;
+      if (fecha_hasta && baseFecha > fecha_hasta) continue;
+
+      const op = {
+        id_operacion: `oc-${oc.id_ocupacion}`,
+        id_ocupacion: oc.id_ocupacion,
+        tipo: 'walk_in',
+        estado_final,
+        usuario: oc.usuario ? {
+          id_usuario: oc.usuario.id_usuario,
+          nombre: oc.usuario.nombre,
+          apellido: oc.usuario.apellido,
+          email: oc.usuario.email,
+          telefono: oc.usuario.telefono
+        } : null,
+        vehiculo: oc.vehiculo ? {
+          id_vehiculo: oc.vehiculo.id_vehiculo,
+          placa: oc.vehiculo.placa,
+          marca: oc.vehiculo.marca,
+          modelo: oc.vehiculo.modelo,
+          color: oc.vehiculo.color
+        } : null,
+        espacio: oc.espacio ? {
+          id_espacio: oc.espacio.id_espacio,
+          numero_espacio: oc.espacio.numero_espacio,
+          id_parking: oc.espacio.id_parking
+        } : null,
+        fechas: {
+          creada_at: oc.hora_entrada || null,
+          hora_programada_inicio: null,
+          hora_programada_fin: null,
+          entrada_at: oc.hora_entrada || null,
+          salida_at: oc.hora_salida || null,
+          pago_at: pagoCompleto?.fecha_pago || pagoCompleto?.emitido_en || null
+        },
+        duracion_minutos: oc.tiempo_total_minutos || null,
+        pago: pagoCompleto ? {
+          id_pago: pagoCompleto.id_pago,
+          monto: pagoCompleto.monto,
+          estado: pagoCompleto.estado,
+          metodo: pagoCompleto.metodo_pago?.nombre || null,
+          metodo_tipo: Historial.inferirTipoMetodo(pagoCompleto.metodo_pago?.nombre),
+          comprobante: {
+            tipo: pagoCompleto.tipo_comprobante || null,
+            serie: pagoCompleto.serie || null,
+            numero: pagoCompleto.numero || null,
+            emitido_en: pagoCompleto.emitido_en || pagoCompleto.fecha_pago || null
+          }
+        } : null
+      };
+
+      operaciones.push(op);
+    }
+
+    // 7. Ordenar por fecha más reciente similar a parking
+    operaciones.sort((a, b) => {
+      const aDate = a.fechas.pago_at || a.fechas.salida_at || a.fechas.entrada_at || a.fechas.hora_programada_inicio || a.fechas.creada_at || '';
+      const bDate = b.fechas.pago_at || b.fechas.salida_at || b.fechas.entrada_at || b.fechas.hora_programada_inicio || b.fechas.creada_at || '';
+      return new Date(bDate).getTime() - new Date(aDate).getTime();
+    });
+
+    return operaciones;
+  }
 }
 
 module.exports = Historial;
