@@ -1,0 +1,46 @@
+name: Sync from api-nodejs-parking
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Cada 1 hora
+  workflow_dispatch:  # Permite ejecutarlo manualmente
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout api-mirror-azure
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.SYNC_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Agregar repositorio origen
+        run: |
+          git remote add source https://github.com/dariverap/api-nodejs-parking.git || true
+          git fetch source main
+      
+      - name: Hacer backup de workflows
+        run: |
+          mkdir -p /tmp/workflows-backup
+          cp -r .github/workflows/* /tmp/workflows-backup/ 2>/dev/null || true
+      
+      - name: Sincronizar cambios (excepto workflows)
+        run: |
+          git merge source/main -m "Sync from api-nodejs-parking" --allow-unrelated-histories -X theirs || echo "Ya está actualizado"
+      
+      - name: Restaurar workflows de Azure
+        run: |
+          cp -r /tmp/workflows-backup/* .github/workflows/
+          git add .github/workflows/
+          git commit -m "Mantener workflows de Azure" || true
+      
+      - name: Push cambios
+        run: |
+          git push origin main || echo "No hay cambios nuevos"
