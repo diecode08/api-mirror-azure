@@ -7,8 +7,18 @@ const Vehiculo = require('../models/vehiculo.model');
  */
 const getAllVehiculos = async (req, res) => {
   try {
-    const vehiculos = await Vehiculo.getAll();
-    
+    // Con RLS desactivado y usando service role, debemos filtrar por usuario aquí
+    // Regla: usuarios normales ven solo sus vehículos; admin_general puede ver todos
+    const isAdmin = req.user?.rol === 'admin_general';
+    const userId = req.user?.id;
+
+    let vehiculos;
+    if (isAdmin) {
+      vehiculos = await Vehiculo.getAll();
+    } else {
+      vehiculos = await Vehiculo.getByUserId(userId);
+    }
+
     res.status(200).json({
       success: true,
       data: vehiculos
@@ -37,6 +47,14 @@ const getVehiculoById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Vehículo no encontrado'
+      });
+    }
+
+    // Restringir acceso: solo dueño o admin_general
+    if (vehiculo.id_usuario !== req.user.id && req.user.rol !== 'admin_general') {
+      return res.status(403).json({
+        success: false,
+        message: 'No tiene permisos para ver este vehículo'
       });
     }
     
