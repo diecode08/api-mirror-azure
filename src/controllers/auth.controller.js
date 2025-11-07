@@ -285,6 +285,17 @@ const getProfile = async (req, res) => {
       });
     }
 
+    // Obtener parkings asignados si es admin_parking o empleado
+    let parkings = [];
+    if (usuario.rol === 'admin_parking' || usuario.rol === 'empleado') {
+      try {
+        parkings = await UsuarioParking.getParkingIdsByUser(userId);
+      } catch (e) {
+        console.warn('No se pudieron obtener parkings del usuario:', e);
+        parkings = [];
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -294,7 +305,8 @@ const getProfile = async (req, res) => {
         email: usuario.email,
         telefono: usuario.telefono,
         rol: usuario.rol,
-        fecha_registro: usuario.fecha_registro
+        fecha_registro: usuario.fecha_registro,
+        parkings: parkings
       }
     });
   } catch (error) {
