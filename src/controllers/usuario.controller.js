@@ -486,7 +486,9 @@ const getScopedEmployees = async (req, res) => {
         .from('usuario')
         .select('*')
         .in('id_usuario', empleadoIds)
-        .eq('rol', 'empleado');
+        .eq('rol', 'empleado')
+        .is('deleted_at', null)
+        .eq('bloqueado', false);
       if (empErr) throw empErr;
 
       // Adjuntar nombres de parkings
