@@ -31,7 +31,7 @@ class Tarifa {
   }
 
   /**
-   * Obtener tarifas por ID de parking
+   * Obtener tarifas por ID de parking (solo activas, sin deleted_at)
    * @param {number} parkingId - ID del parking
    * @returns {Promise<Array>} Lista de tarifas del parking
    */
@@ -39,7 +39,8 @@ class Tarifa {
     const { data, error } = await supabase
       .from('tarifa')
       .select('*')
-      .eq('id_parking', parkingId);
+      .eq('id_parking', parkingId)
+      .is('deleted_at', null);
     
     if (error) throw error;
     return data;
@@ -104,12 +105,37 @@ class Tarifa {
   }
 
   /**
-   * Eliminar una tarifa
+   * Eliminar una tarifa (borrado lógico)
+   * @param {number} id - ID de la tarifa
+   * @param {string} userId - ID del usuario que elimina
+   * @returns {Promise<Object>} Tarifa actualizada
+   */
+  static async softDelete(id, userId) {
+    console.log('[tarifa.model][softDelete] ID:', id, 'Usuario:', userId);
+    const { data, error } = await supabase
+      .from('tarifa')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: userId
+      })
+      .eq('id_tarifa', id)
+      .select();
+
+    if (error) {
+      console.error('[tarifa.model][softDelete] Error de Supabase:', error);
+      throw error;
+    }
+    console.log('[tarifa.model][softDelete] Tarifa eliminada (soft delete):', data[0]);
+    return data[0];
+  }
+
+  /**
+   * Eliminar una tarifa (borrado físico - mantener por compatibilidad legacy)
    * @param {number} id - ID de la tarifa
    * @returns {Promise<boolean>} Resultado de la operación
    */
   static async delete(id) {
-    console.log('[tarifa.model][delete] Eliminando tarifa ID:', id);
+    console.log('[tarifa.model][delete] Eliminando tarifa ID (hard delete):', id);
     const { error } = await supabase
       .from('tarifa')
       .delete()

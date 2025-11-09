@@ -28,23 +28,19 @@ const create = async (req, res) => {
       console.log('[tarifa.controller][create] Validación fallida: tipo o monto faltante');
       return res.status(400).json({ success: false, message: 'tipo y monto son requeridos' });
     }
+
+    // Verificar que el parking existe (sin validación de permisos duplicada; isParkingAdmin middleware ya lo cubre)
     const parking = await Parking.getById(id);
     if (!parking) {
       console.log('[tarifa.controller][create] Parking no encontrado:', id);
       return res.status(404).json({ success: false, message: 'Parking no encontrado' });
     }
 
-    // seguridad extra (isParkingAdmin ya corre en rutas mutantes)
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
-      console.log('[tarifa.controller][create] Permisos insuficientes:', { userId: req.user.id, userRole: req.user.rol, parkingAdmin: parking.id_admin });
-      return res.status(403).json({ success: false, message: 'Permisos insuficientes' });
-    }
-
     const tarifaData = {
       id_parking: Number(id),
       tipo,
-      monto: Number(monto), // Asegurar que sea número
-      condiciones: condiciones || null // Convertir undefined a null para campos nullable
+      monto: Number(monto),
+      condiciones: condiciones || null
     };
     console.log('[tarifa.controller][create] Datos a insertar:', tarifaData);
 
@@ -64,14 +60,11 @@ const update = async (req, res) => {
     const { id, tarifaId } = req.params;
     console.log('[tarifa.controller][update] Parámetros:', { id, tarifaId });
 
+    // Verificar que el parking existe (isParkingAdmin middleware ya validó permisos)
     const parking = await Parking.getById(id);
     if (!parking) {
       console.log('[tarifa.controller][update] Parking no encontrado:', id);
       return res.status(404).json({ success: false, message: 'Parking no encontrado' });
-    }
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
-      console.log('[tarifa.controller][update] Permisos insuficientes:', { userId: req.user.id, userRole: req.user.rol, parkingAdmin: parking.id_admin });
-      return res.status(403).json({ success: false, message: 'Permisos insuficientes' });
     }
 
     const updateData = { ...req.body };
@@ -95,23 +88,22 @@ const update = async (req, res) => {
   }
 };
 
-// Eliminar tarifa
+// Eliminar tarifa (soft delete)
 const remove = async (req, res) => {
   try {
     console.log('[tarifa.controller][remove] Parámetros:', req.params);
     const { id, tarifaId } = req.params;
+    const userId = req.user.id;
+
+    // Verificar que el parking existe (isParkingAdmin middleware ya validó permisos)
     const parking = await Parking.getById(id);
     if (!parking) {
       console.log('[tarifa.controller][remove] Parking no encontrado:', id);
       return res.status(404).json({ success: false, message: 'Parking no encontrado' });
     }
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
-      console.log('[tarifa.controller][remove] Permisos insuficientes:', { userId: req.user.id, userRole: req.user.rol, parkingAdmin: parking.id_admin });
-      return res.status(403).json({ success: false, message: 'Permisos insuficientes' });
-    }
 
-    console.log('[tarifa.controller][remove] Eliminando tarifa:', tarifaId);
-    await Tarifa.delete(tarifaId);
+    console.log('[tarifa.controller][remove] Eliminando tarifa (soft delete):', tarifaId);
+    await Tarifa.softDelete(tarifaId, userId);
     console.log('[tarifa.controller][remove] Tarifa eliminada exitosamente');
     return res.status(200).json({ success: true, message: 'Tarifa eliminada correctamente' });
   } catch (error) {

@@ -244,14 +244,23 @@ const isParkingAdmin = (paramName = 'id') => {
         .from('parking')
         .select('id_admin')
         .eq('id_parking', parkingId)
-        .single();
+        .is('deleted_at', null)
+        .maybeSingle();
 
       if (parkingError) {
         console.log('[isParkingAdmin] ERROR en consulta parking:', parkingError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Error al verificar parking',
+          error: parkingError.message
+        });
+      }
+
+      if (!parking) {
+        console.log('[isParkingAdmin] Parking no encontrado o eliminado:', parkingId);
         return res.status(404).json({
           success: false,
-          message: 'Parking no encontrado',
-          error: parkingError.message
+          message: 'Parking no encontrado'
         });
       }
 
