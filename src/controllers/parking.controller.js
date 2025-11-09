@@ -467,8 +467,36 @@ const assignAdminToParking = async (req, res) => {
 const getParkingsByUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const parkings = await Parking.getParkingsByUserId(userId);
-    
+    // La consulta actual retorna filas de usuario_parking con el parking anidado.
+    // Normalizamos para responder un array de parkings consistente con getParkingsByAdminId.
+    const usuarioParkings = await Parking.getParkingsByUserId(userId);
+
+    // Logs de diagnóstico (no sensibles)
+    try {
+      const upCount = Array.isArray(usuarioParkings) ? usuarioParkings.length : 0;
+      const upIds = (usuarioParkings || []).map(up => up?.id_parking).filter(Boolean);
+      console.log(`[getParkingsByUser] userId=${userId} rows(usuario_parking)=${upCount} ids=`, upIds);
+    } catch (_) {}
+
+    const parkings = (usuarioParkings || [])
+      .filter(up => up && up.parking && up.parking.deleted_at == null)
+      .map(up => ({ ...up.parking }));
+
+    // Si hay asignaciones en usuario_parking que no aparecen por join (ej. parking desaparecido), intentar fallback simple
+    if (usuarioParkings?.length > parkings.length) {
+      try {
+        const missing = usuarioParkings.filter(up => !parkings.find(p => p.id_parking === up.id_parking));
+        if (missing.length) {
+          console.log('[getParkingsByUser] Fallback para parkings faltantes ids=', missing.map(m => m.id_parking));
+        }
+      } catch(_) {}
+    }
+
+    try {
+      const outIds = (parkings || []).map(p => p?.id_parking).filter(Boolean);
+      console.log(`[getParkingsByUser] response parkings count=${parkings?.length || 0} ids=`, outIds);
+    } catch (_) {}
+
     res.status(200).json({
       success: true,
       data: parkings

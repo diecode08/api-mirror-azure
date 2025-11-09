@@ -285,13 +285,22 @@ const getProfile = async (req, res) => {
       });
     }
 
-    // Obtener parkings asignados si es admin_parking o empleado
+    // Obtener parkings asignados activos (sin deleted_at) si es admin_parking o empleado
     let parkings = [];
     if (usuario.rol === 'admin_parking' || usuario.rol === 'empleado') {
       try {
-        parkings = await UsuarioParking.getParkingIdsByUser(userId);
+        const { data, error } = await supabase
+          .from('usuario_parking')
+          .select(`
+            id_parking,
+            parking:parking!inner(id_parking, deleted_at)
+          `)
+          .eq('id_usuario', userId)
+          .is('parking.deleted_at', null);
+        if (error) throw error;
+        parkings = (data || []).map(r => r.id_parking);
       } catch (e) {
-        console.warn('No se pudieron obtener parkings del usuario:', e);
+        console.warn('No se pudieron obtener parkings activos del usuario:', e?.message || e);
         parkings = [];
       }
     }
@@ -299,7 +308,9 @@ const getProfile = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
+        // Mantener compatibilidad: exponer explícitamente id_usuario y conservar id
         id: usuario.id_usuario,
+        id_usuario: usuario.id_usuario,
         nombre: usuario.nombre,
         apellido: usuario.apellido,
         email: usuario.email,
