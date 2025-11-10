@@ -1,6 +1,45 @@
 const supabase = require('../config/supabase');
 const Pago = require('../models/pago.model');
 const Ocupacion = require('../models/ocupacion.model');
+const Tarifa = require('../models/tarifa.model');
+const Reserva = require('../models/reserva.model');
+
+// Helper: calcula monto según tipo de tarifa
+function calcularSegunTipoTarifa(tarifa, minutos) {
+  const tipo = (tarifa.tipo || '').toLowerCase();
+  const monto = parseFloat(tarifa.monto);
+  
+  switch(tipo) {
+    case 'hora':
+      const horas = Math.ceil(minutos / 60);
+      return horas * monto;
+      
+    case 'medio dia': // 12 horas
+      if (minutos <= 720) return monto;
+      const horasExtraMedioDia = Math.ceil((minutos - 720) / 60);
+      return monto + (horasExtraMedioDia * (monto / 12));
+      
+    case 'dia': // 24 horas
+      if (minutos <= 1440) return monto;
+      const diasExtra = Math.ceil((minutos - 1440) / 1440);
+      return monto + (diasExtra * monto);
+      
+    case 'semana': // 7 días (10080 minutos)
+      if (minutos <= 10080) return monto;
+      const semanasExtra = Math.ceil((minutos - 10080) / 10080);
+      return monto + (semanasExtra * monto);
+      
+    case 'mes': // 30 días (43200 minutos)
+      if (minutos <= 43200) return monto;
+      const mesesExtra = Math.ceil((minutos - 43200) / 43200);
+      return monto + (mesesExtra * monto);
+      
+    default:
+      // Por defecto, cálculo horario
+      const hrs = Math.ceil(minutos / 60);
+      return hrs * monto;
+  }
+}
 
 // Helper: calcula monto y minutos basados en hora_entrada y ahora
 async function calcularMontoOcupacion(ocupacion) {
@@ -20,6 +59,30 @@ async function calcularMontoOcupacion(ocupacion) {
   const ahora = new Date();
   const minutos = Math.max(1, Math.floor((ahora - entrada) / 60000));
 
+  // Intentar obtener tarifa seleccionada de la reserva
+  let tarifaSeleccionada = null;
+  if (ocupacion.id_reserva) {
+    const reserva = await Reserva.getById(ocupacion.id_reserva);
+    if (reserva?.id_tarifa) {
+      tarifaSeleccionada = await Tarifa.getById(reserva.id_tarifa);
+    }
+  }
+  
+  // Si hay tarifa seleccionada y está activa, usarla
+  if (tarifaSeleccionada && !tarifaSeleccionada.deleted_at) {
+    const monto = calcularSegunTipoTarifa(tarifaSeleccionada, minutos);
+    return { monto: Number(monto), minutos, parkingNombre: parking?.nombre || '' };
+  }
+  
+  // Fallback 1: Buscar tarifa 'hora' del parking
+  const tarifaHora = await Tarifa.getByTipo(espacio.id_parking, 'hora');
+  if (tarifaHora && !tarifaHora.deleted_at) {
+    const horas = Math.ceil(minutos / 60);
+    const monto = horas * tarifaHora.monto;
+    return { monto: Number(monto), minutos, parkingNombre: parking?.nombre || '' };
+  }
+
+  // Fallback 2: Usar tarifa_hora del parking (legacy)
   let monto = 0;
   if (parking?.tarifa_hora) {
     const horas = Math.ceil(minutos / 60);
@@ -28,7 +91,7 @@ async function calcularMontoOcupacion(ocupacion) {
     monto = parking.tarifa_base;
   } else {
     const horas = Math.ceil(minutos / 60);
-    monto = horas * 5; // default
+    monto = horas * 5; // default S/ 5/hora
   }
 
   return { monto: Number(monto), minutos, parkingNombre: parking?.nombre || '' };

@@ -906,47 +906,85 @@ const calcularMonto = async (req, res) => {
     // Calcular tiempo transcurrido en minutos
     const horaEntrada = new Date(ocupacion.hora_entrada);
     const ahora = new Date();
-    const tiempoMinutos = Math.floor((ahora - horaEntrada) / 60000);
-    
-    // Obtener tarifa del parking
+    const tiempoMinutos = Math.max(1, Math.floor((ahora - horaEntrada) / 60000));
+
+    // Obtener datos de espacio / parking
     const espacio = await Espacio.getById(ocupacion.id_espacio);
     const parking = await Parking.getById(espacio.id_parking);
-    
     if (!parking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Parking no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Parking no encontrado' });
     }
-    
-    // Obtener tarifa por hora del parking
+
+    // Helper local para cálculo según tipo (reutiliza lógica de flujo.controller)
+    const calcularSegunTipoTarifa = (tarifa, minutos) => {
+      const tipo = (tarifa.tipo || '').toLowerCase();
+      const montoBase = parseFloat(tarifa.monto);
+      switch (tipo) {
+        case 'hora': {
+          const horas = Math.ceil(minutos / 60); return horas * montoBase; }
+        case 'medio dia': {
+          if (minutos <= 720) return montoBase; const horasExtra = Math.ceil((minutos - 720)/60); return montoBase + (horasExtra * (montoBase/12)); }
+        case 'dia': {
+          if (minutos <= 1440) return montoBase; const diasExtra = Math.ceil((minutos - 1440)/1440); return montoBase + (diasExtra * montoBase); }
+        case 'semana': {
+          if (minutos <= 10080) return montoBase; const semanasExtra = Math.ceil((minutos - 10080)/10080); return montoBase + (semanasExtra * montoBase); }
+        case 'mes': {
+          if (minutos <= 43200) return montoBase; const mesesExtra = Math.ceil((minutos - 43200)/43200); return montoBase + (mesesExtra * montoBase); }
+        default: {
+          const horas = Math.ceil(minutos / 60); return horas * montoBase; }
+      }
+    };
+
     const Tarifa = require('../models/tarifa.model');
-    const tarifas = await Tarifa.getByParkingId(espacio.id_parking);
-    const tarifaHora = tarifas.find(t => t.tipo.toLowerCase() === 'hora');
-    
-    // Calcular monto
-    let monto = 0;
-    
-    if (tarifaHora) {
-      // Cobrar por hora (redondear hacia arriba)
-      const horas = Math.ceil(tiempoMinutos / 60);
-      monto = horas * tarifaHora.monto;
-    } else {
-      // Sin tarifa configurada, cobrar S/. 5 por hora por defecto
-      const horas = Math.ceil(tiempoMinutos / 60);
-      monto = horas * 5;
+    let tarifaAplicada = null;
+    let montoCalculado = 0;
+    let tipoTarifaAplicada = null;
+
+    // Si la ocupación proviene de una reserva con tarifa seleccionada, usarla
+    if (ocupacion.id_reserva) {
+      try {
+        const reserva = await Reserva.getById(ocupacion.id_reserva);
+        if (reserva?.id_tarifa) {
+          tarifaAplicada = await Tarifa.getById(reserva.id_tarifa);
+          if (tarifaAplicada && !tarifaAplicada.deleted_at) {
+            montoCalculado = calcularSegunTipoTarifa(tarifaAplicada, tiempoMinutos);
+            tipoTarifaAplicada = tarifaAplicada.tipo;
+          }
+        }
+      } catch (e) {
+        // Ignorar y usar fallback
+      }
     }
-    
+
+    // Fallback: tarifa 'hora' del parking
+    if (!tarifaAplicada) {
+      try {
+        const tarifaHora = await Tarifa.getByTipo(espacio.id_parking, 'hora');
+        if (tarifaHora && !tarifaHora.deleted_at) {
+          const horas = Math.ceil(tiempoMinutos / 60);
+          montoCalculado = horas * parseFloat(tarifaHora.monto);
+          tipoTarifaAplicada = tarifaHora.tipo;
+          tarifaAplicada = tarifaHora;
+        }
+      } catch (e) {}
+    }
+
+    // Fallback final legacy: tarifa_hora de parking o default 5
+    if (!tarifaAplicada) {
+      const horas = Math.ceil(tiempoMinutos / 60);
+      const tarifaHoraLegacy = parking.tarifa_hora ? parseFloat(parking.tarifa_hora) : 5;
+      montoCalculado = horas * tarifaHoraLegacy;
+      tipoTarifaAplicada = 'hora';
+    }
+
     res.status(200).json({
       success: true,
       data: {
-        monto: parseFloat(monto.toFixed(2)),
+        monto: Number(montoCalculado.toFixed(2)),
         tiempo_minutos: tiempoMinutos,
         hora_entrada: ocupacion.hora_entrada,
-        parking: {
-          nombre: parking.nombre,
-          tarifa_hora: tarifaHora ? tarifaHora.monto : null
-        }
+        tarifa_tipo: tipoTarifaAplicada,
+        parking: { nombre: parking.nombre }
       }
     });
   } catch (error) {
@@ -1006,38 +1044,66 @@ const marcarSalidaConPago = async (req, res) => {
       });
     }
 
-    // 2. Calcular monto y tiempo (usando tabla tarifa)
+    // 2. Calcular monto y tiempo (considerando tarifa seleccionada en la reserva si existe)
     const entrada = new Date(ocupacion.hora_entrada);
     const ahora = new Date();
     const minutos = Math.max(1, Math.floor((ahora - entrada) / 60000));
 
-    // Obtener id_parking desde espacio
     const { data: espacio } = await supabase
       .from('espacio')
       .select('id_parking')
       .eq('id_espacio', ocupacion.id_espacio)
       .single();
 
-    // Obtener tarifa por hora del parking desde la tabla tarifa
     const Tarifa = require('../models/tarifa.model');
     let montoCalculado = 0;
-    try {
-      const tarifas = await Tarifa.getByParkingId(espacio.id_parking);
-      const tarifaHora = tarifas?.find(t => String(t.tipo).toLowerCase() === 'hora');
-      const horas = Math.ceil(minutos / 60);
-      if (tarifaHora?.monto) {
-        montoCalculado = horas * Number(tarifaHora.monto);
-      } else {
-        // Fallback: S/. 5 por hora si no hay tarifa configurada
-        montoCalculado = horas * 5;
+    const calcularSegunTipoTarifa = (tarifa, minutos) => {
+      const tipo = (tarifa.tipo || '').toLowerCase();
+      const montoBase = parseFloat(tarifa.monto);
+      switch (tipo) {
+        case 'hora': {
+          const horas = Math.ceil(minutos / 60); return horas * montoBase; }
+        case 'medio dia': {
+          if (minutos <= 720) return montoBase; const horasExtra = Math.ceil((minutos - 720)/60); return montoBase + (horasExtra * (montoBase/12)); }
+        case 'dia': {
+          if (minutos <= 1440) return montoBase; const diasExtra = Math.ceil((minutos - 1440)/1440); return montoBase + (diasExtra * montoBase); }
+        case 'semana': {
+          if (minutos <= 10080) return montoBase; const semanasExtra = Math.ceil((minutos - 10080)/10080); return montoBase + (semanasExtra * montoBase); }
+        case 'mes': {
+          if (minutos <= 43200) return montoBase; const mesesExtra = Math.ceil((minutos - 43200)/43200); return montoBase + (mesesExtra * montoBase); }
+        default: {
+          const horas = Math.ceil(minutos / 60); return horas * montoBase; }
       }
-    } catch (e) {
-      // Si falla la consulta a tarifas, aplicar fallback de S/. 5 por hora
-      const horas = Math.ceil(minutos / 60);
-      montoCalculado = horas * 5;
+    };
+
+    let tarifaSeleccionada = null;
+    if (ocupacion.id_reserva) {
+      try {
+        const reserva = await Reserva.getById(ocupacion.id_reserva);
+        if (reserva?.id_tarifa) {
+          tarifaSeleccionada = await Tarifa.getById(reserva.id_tarifa);
+        }
+      } catch (e) {}
     }
 
-    montoCalculado = Number(Number(montoCalculado).toFixed(2));
+    if (tarifaSeleccionada && !tarifaSeleccionada.deleted_at) {
+      montoCalculado = calcularSegunTipoTarifa(tarifaSeleccionada, minutos);
+    } else {
+      try {
+        const tarifaHora = await Tarifa.getByTipo(espacio.id_parking, 'hora');
+        const horas = Math.ceil(minutos / 60);
+        if (tarifaHora?.monto) {
+          montoCalculado = horas * Number(tarifaHora.monto);
+        } else {
+          montoCalculado = horas * 5; // fallback
+        }
+      } catch (e) {
+        const horas = Math.ceil(minutos / 60);
+        montoCalculado = horas * 5;
+      }
+    }
+
+    montoCalculado = Number(montoCalculado.toFixed(2));
 
     // 3. Obtener próximo número de comprobante
     const { data: ultimoComprobante } = await supabase

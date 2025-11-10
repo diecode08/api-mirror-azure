@@ -317,7 +317,7 @@ const verificarDisponibilidad = async (req, res) => {
  */
 const createReserva = async (req, res) => {
   try {
-    const { id_espacio, id_vehiculo, fecha_inicio, fecha_fin } = req.body;
+    const { id_espacio, id_vehiculo, fecha_inicio, fecha_fin, id_tarifa } = req.body;
     const id_usuario = req.user.id;
     
     // Validar datos requeridos
@@ -372,6 +372,27 @@ const createReserva = async (req, res) => {
       });
     }
     
+    // Validar id_tarifa si se proporciona
+    if (id_tarifa) {
+      const Tarifa = require('../models/tarifa.model');
+      const tarifa = await Tarifa.getById(id_tarifa);
+      
+      if (!tarifa || tarifa.deleted_at) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tarifa no encontrada o inactiva'
+        });
+      }
+      
+      // Verificar que la tarifa pertenece al parking del espacio
+      if (tarifa.id_parking !== espacio.id_parking) {
+        return res.status(400).json({
+          success: false,
+          message: 'La tarifa no pertenece al parking del espacio seleccionado'
+        });
+      }
+    }
+    
     // Verificar disponibilidad
     const disponible = await Reserva.verificarDisponibilidad(id_espacio, fecha_inicio, fecha_fin);
     if (!disponible) {
@@ -389,7 +410,8 @@ const createReserva = async (req, res) => {
       id_vehiculo,
       hora_inicio: fecha_inicio,  // Mapear fecha_inicio -> hora_inicio
       hora_fin: fecha_fin,         // Mapear fecha_fin -> hora_fin
-      estado: 'pendiente'
+      estado: 'pendiente',
+      id_tarifa: id_tarifa || null  // Guardar id_tarifa si se proporcionó
     };
     
     const nuevaReserva = await Reserva.create(reservaData);
