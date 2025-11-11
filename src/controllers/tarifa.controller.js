@@ -16,6 +16,9 @@ const listByParking = async (req, res) => {
   }
 };
 
+// Catálogo fijo de tipos permitidos (valor canónico en minúsculas)
+const ALLOWED_TYPES = ['hora','medio dia','dia','semana','mes'];
+
 // Crear tarifa
 const create = async (req, res) => {
   try {
@@ -28,23 +31,32 @@ const create = async (req, res) => {
       console.log('[tarifa.controller][create] Validación fallida: tipo o monto faltante');
       return res.status(400).json({ success: false, message: 'tipo y monto son requeridos' });
     }
+
+    // Normalizar tipo
+    const tipoCanon = String(tipo).trim().toLowerCase();
+    if (!ALLOWED_TYPES.includes(tipoCanon)) {
+      return res.status(400).json({ success: false, message: 'Tipo de tarifa inválido' });
+    }
+
+    // Verificar que el parking existe (sin validación de permisos duplicada; isParkingAdmin middleware ya lo cubre)
     const parking = await Parking.getById(id);
     if (!parking) {
       console.log('[tarifa.controller][create] Parking no encontrado:', id);
       return res.status(404).json({ success: false, message: 'Parking no encontrado' });
     }
 
-    // seguridad extra (isParkingAdmin ya corre en rutas mutantes)
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
-      console.log('[tarifa.controller][create] Permisos insuficientes:', { userId: req.user.id, userRole: req.user.rol, parkingAdmin: parking.id_admin });
-      return res.status(403).json({ success: false, message: 'Permisos insuficientes' });
+    // Verificar duplicado (misma tarifa activa en el parking)
+    const existentes = await Tarifa.getByParkingId(id);
+    const existeMismoTipo = existentes.some(t => String(t.tipo).toLowerCase() === tipoCanon);
+    if (existeMismoTipo) {
+      return res.status(409).json({ success: false, message: `Ya existe una tarifa de tipo "${tipoCanon}" en este parking` });
     }
 
     const tarifaData = {
       id_parking: Number(id),
-      tipo,
-      monto: Number(monto), // Asegurar que sea número
-      condiciones: condiciones || null // Convertir undefined a null para campos nullable
+      tipo: tipoCanon,
+      monto: Number(monto),
+      condiciones: condiciones || null
     };
     console.log('[tarifa.controller][create] Datos a insertar:', tarifaData);
 
@@ -64,17 +76,46 @@ const update = async (req, res) => {
     const { id, tarifaId } = req.params;
     console.log('[tarifa.controller][update] Parámetros:', { id, tarifaId });
 
+    // Verificar que el parking existe (isParkingAdmin middleware ya validó permisos)
     const parking = await Parking.getById(id);
     if (!parking) {
       console.log('[tarifa.controller][update] Parking no encontrado:', id);
       return res.status(404).json({ success: false, message: 'Parking no encontrado' });
     }
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
-      console.log('[tarifa.controller][update] Permisos insuficientes:', { userId: req.user.id, userRole: req.user.rol, parkingAdmin: parking.id_admin });
-      return res.status(403).json({ success: false, message: 'Permisos insuficientes' });
+
+    // Obtener tarifa actual para validaciones adicionales
+    const actual = await Tarifa.getById(tarifaId);
+    if (!actual || actual.deleted_at) {
+      return res.status(404).json({ success: false, message: 'Tarifa no encontrada' });
+    }
+    if (Number(actual.id_parking) !== Number(id)) {
+      return res.status(404).json({ success: false, message: 'Tarifa no pertenece a este parking' });
     }
 
     const updateData = { ...req.body };
+
+    // Si se intenta cambiar el tipo, validar catálogo y duplicados
+    if (updateData.tipo !== undefined) {
+      const nuevoTipoCanon = String(updateData.tipo).trim().toLowerCase();
+      if (!ALLOWED_TYPES.includes(nuevoTipoCanon)) {
+        return res.status(400).json({ success: false, message: 'Tipo de tarifa inválido' });
+      }
+      // Obtener tarifas activas para ver duplicados (excluyendo la actual)
+      const existentes = await Tarifa.getByParkingId(id);
+      const duplicado = existentes.some(t => t.id_tarifa != tarifaId && String(t.tipo).toLowerCase() === nuevoTipoCanon);
+      if (duplicado) {
+        return res.status(409).json({ success: false, message: `Ya existe una tarifa de tipo "${nuevoTipoCanon}" en este parking` });
+      }
+      // Asegurar que no se elimine el último 'hora' al cambiar tipo desde 'hora' a otro
+      const actualTipoCanon = String(actual.tipo).trim().toLowerCase();
+      if (actualTipoCanon === 'hora' && nuevoTipoCanon !== 'hora') {
+        const horasActivas = existentes.filter(t => String(t.tipo).toLowerCase() === 'hora' && t.id_tarifa != tarifaId);
+        if (horasActivas.length === 0) {
+          return res.status(409).json({ success: false, message: "Debe existir al menos una tarifa de tipo 'hora' en el parking" });
+        }
+      }
+      updateData.tipo = nuevoTipoCanon; // normalizar
+    }
 
     // Convertir undefined a null para campos nullable
     if (updateData.condiciones !== undefined) {
@@ -95,23 +136,41 @@ const update = async (req, res) => {
   }
 };
 
-// Eliminar tarifa
+// Eliminar tarifa (soft delete)
 const remove = async (req, res) => {
   try {
     console.log('[tarifa.controller][remove] Parámetros:', req.params);
     const { id, tarifaId } = req.params;
+    const userId = req.user.id;
+
+    // Verificar que el parking existe (isParkingAdmin middleware ya validó permisos)
     const parking = await Parking.getById(id);
     if (!parking) {
       console.log('[tarifa.controller][remove] Parking no encontrado:', id);
       return res.status(404).json({ success: false, message: 'Parking no encontrado' });
     }
-    if (parking.id_admin !== req.user.id && req.user.rol !== 'admin_general') {
-      console.log('[tarifa.controller][remove] Permisos insuficientes:', { userId: req.user.id, userRole: req.user.rol, parkingAdmin: parking.id_admin });
-      return res.status(403).json({ success: false, message: 'Permisos insuficientes' });
+
+    // Obtener la tarifa a eliminar para validar reglas
+    const objetivo = await Tarifa.getById(tarifaId);
+    if (!objetivo || objetivo.deleted_at) {
+      return res.status(404).json({ success: false, message: 'Tarifa no encontrada' });
+    }
+    if (Number(objetivo.id_parking) !== Number(id)) {
+      return res.status(404).json({ success: false, message: 'Tarifa no pertenece a este parking' });
     }
 
-    console.log('[tarifa.controller][remove] Eliminando tarifa:', tarifaId);
-    await Tarifa.delete(tarifaId);
+    // Evitar eliminar la última tarifa 'hora'
+    const tipoCanon = String(objetivo.tipo).trim().toLowerCase();
+    if (tipoCanon === 'hora') {
+      const existentes = await Tarifa.getByParkingId(objetivo.id_parking);
+      const horasActivas = existentes.filter(t => String(t.tipo).toLowerCase() === 'hora');
+      if (horasActivas.length <= 1) {
+        return res.status(409).json({ success: false, message: "No puedes eliminar la última tarifa de tipo 'hora'" });
+      }
+    }
+
+    console.log('[tarifa.controller][remove] Eliminando tarifa (soft delete):', tarifaId);
+    await Tarifa.softDelete(tarifaId, userId);
     console.log('[tarifa.controller][remove] Tarifa eliminada exitosamente');
     return res.status(200).json({ success: true, message: 'Tarifa eliminada correctamente' });
   } catch (error) {

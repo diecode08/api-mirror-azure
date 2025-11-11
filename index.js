@@ -14,6 +14,7 @@ const ocupacionRoutes = require('./src/routes/ocupacion.routes');
 const metodoPagoRoutes = require('./src/routes/metodoPago.routes');
 const pagoRoutes = require('./src/routes/pago.routes');
 const notificacionRoutes = require('./src/routes/notificacion.routes');
+const historialRoutes = require('./src/routes/historial.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,7 +45,7 @@ app.use('/api/ocupaciones', ocupacionRoutes);
 app.use('/api/metodos-pago', metodoPagoRoutes);
 app.use('/api/pagos', pagoRoutes);
 app.use('/api/notificaciones', notificacionRoutes);
-
+app.use('/api/historial', historialRoutes);
 // Middleware para manejo de errores
 app.use((err, req, res, next) => {
   console.error(err.stack);

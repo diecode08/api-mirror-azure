@@ -317,7 +317,7 @@ const verificarDisponibilidad = async (req, res) => {
  */
 const createReserva = async (req, res) => {
   try {
-    const { id_espacio, id_vehiculo, fecha_inicio, fecha_fin } = req.body;
+    const { id_espacio, id_vehiculo, fecha_inicio, fecha_fin, id_tarifa } = req.body;
     const id_usuario = req.user.id;
     
     // Validar datos requeridos
@@ -372,6 +372,27 @@ const createReserva = async (req, res) => {
       });
     }
     
+    // Validar id_tarifa si se proporciona
+    if (id_tarifa) {
+      const Tarifa = require('../models/tarifa.model');
+      const tarifa = await Tarifa.getById(id_tarifa);
+      
+      if (!tarifa || tarifa.deleted_at) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tarifa no encontrada o inactiva'
+        });
+      }
+      
+      // Verificar que la tarifa pertenece al parking del espacio
+      if (tarifa.id_parking !== espacio.id_parking) {
+        return res.status(400).json({
+          success: false,
+          message: 'La tarifa no pertenece al parking del espacio seleccionado'
+        });
+      }
+    }
+    
     // Verificar disponibilidad
     const disponible = await Reserva.verificarDisponibilidad(id_espacio, fecha_inicio, fecha_fin);
     if (!disponible) {
@@ -389,7 +410,8 @@ const createReserva = async (req, res) => {
       id_vehiculo,
       hora_inicio: fecha_inicio,  // Mapear fecha_inicio -> hora_inicio
       hora_fin: fecha_fin,         // Mapear fecha_fin -> hora_fin
-      estado: 'pendiente'
+      estado: 'pendiente',
+      id_tarifa: id_tarifa || null  // Guardar id_tarifa si se proporcionó
     };
     
     const nuevaReserva = await Reserva.create(reservaData);
@@ -747,6 +769,190 @@ const deleteReserva = async (req, res) => {
   }
 };
 
+/**
+ * Crear reserva manual para invitado (sin usuario registrado)
+ * Solo para admin_parking o admin_general
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const createReservaManual = async (req, res) => {
+  try {
+    const {
+      id_parking,
+      id_espacio,
+      id_tarifa,
+      guest_nombre,
+      guest_documento,
+      guest_telefono,
+      marcar_entrada = false
+    } = req.body;
+
+    const id_usuario_admin = req.user.id;
+    const supabase = require('../config/supabase');
+
+    // Validar datos requeridos
+    if (!id_parking || !id_espacio || !guest_nombre) {
+      return res.status(400).json({
+        success: false,
+        message: 'id_parking, id_espacio y guest_nombre son requeridos'
+      });
+    }
+
+    // Validar permisos: solo admin del parking o admin_general
+    const parking = await Parking.getById(id_parking);
+    if (!parking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Parking no encontrado'
+      });
+    }
+
+    if (parking.id_admin !== id_usuario_admin && req.user.rol !== 'admin_general') {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permisos para crear reservas en este parking'
+      });
+    }
+
+    // Validar que el espacio exista y esté disponible
+    const espacio = await Espacio.getById(id_espacio);
+    if (!espacio) {
+      return res.status(404).json({
+        success: false,
+        message: 'Espacio no encontrado'
+      });
+    }
+
+    if (espacio.id_parking !== parseInt(id_parking)) {
+      return res.status(400).json({
+        success: false,
+        message: 'El espacio no pertenece al parking especificado'
+      });
+    }
+
+    if (espacio.estado !== 'disponible') {
+      return res.status(400).json({
+        success: false,
+        message: `El espacio está ${espacio.estado}`
+      });
+    }
+
+    // Validar tarifa si se especifica
+    let tarifaSeleccionada = null;
+    if (id_tarifa) {
+      const Tarifa = require('../models/tarifa.model');
+      tarifaSeleccionada = await Tarifa.getById(id_tarifa);
+      
+      if (!tarifaSeleccionada) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tarifa no encontrada'
+        });
+      }
+
+      if (tarifaSeleccionada.deleted_at) {
+        return res.status(400).json({
+          success: false,
+          message: 'La tarifa seleccionada no está activa'
+        });
+      }
+
+      if (tarifaSeleccionada.id_parking !== parseInt(id_parking)) {
+        return res.status(400).json({
+          success: false,
+          message: 'La tarifa no pertenece al parking especificado'
+        });
+      }
+    }
+
+    // Crear la reserva manual
+    const ahora = new Date();
+    const reservaData = {
+      id_usuario: null, // Reserva de invitado sin usuario registrado
+      id_espacio: parseInt(id_espacio),
+      id_vehiculo: null, // No asociamos vehículo en reservas manuales
+      id_tarifa: id_tarifa ? parseInt(id_tarifa) : null,
+      hora_inicio: ahora.toISOString(),
+      hora_fin: new Date(ahora.getTime() + 2 * 60 * 60 * 1000).toISOString(), // +2 horas por defecto
+      estado: marcar_entrada ? 'confirmada' : 'pendiente',
+      guest_nombre,
+      guest_documento: guest_documento || null,
+      guest_telefono: guest_telefono || null,
+      tipo_origen: 'manual'
+    };
+
+    const { data: nuevaReserva, error: errorReserva } = await supabase
+      .from('reserva')
+      .insert([reservaData])
+      .select()
+      .single();
+
+    if (errorReserva) throw errorReserva;
+
+    // Si se marca entrada inmediata, crear ocupación
+    let ocupacion = null;
+    if (marcar_entrada) {
+      // Cambiar estado del espacio a ocupado
+      await Espacio.update(id_espacio, { estado: 'ocupado' });
+
+      const ocupacionData = {
+        id_reserva: nuevaReserva.id_reserva,
+        id_usuario: id_usuario_admin, // Admin que registra la entrada
+        id_espacio: parseInt(id_espacio),
+        id_vehiculo: null,
+        hora_entrada: ahora.toISOString(),
+        tipo_origen: 'manual'
+      };
+
+      const { data: nuevaOcupacion, error: errorOcupacion } = await supabase
+        .from('ocupacion')
+        .insert([ocupacionData])
+        .select()
+        .single();
+
+      if (errorOcupacion) {
+        // Revertir espacio si falla
+        await Espacio.update(id_espacio, { estado: 'disponible' });
+        throw errorOcupacion;
+      }
+
+      ocupacion = nuevaOcupacion;
+
+      // Actualizar reserva a confirmada
+      await supabase
+        .from('reserva')
+        .update({ estado: 'confirmada' })
+        .eq('id_reserva', nuevaReserva.id_reserva);
+    }
+    else {
+      // Marcar el espacio como reservado para bloquearlo a otros mientras la reserva está pendiente
+      try {
+        await Espacio.update(id_espacio, { estado: 'reservado' });
+      } catch (e) {
+        console.warn('[createReservaManual] No se pudo marcar espacio como reservado:', e?.message);
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: marcar_entrada 
+        ? 'Reserva manual creada y entrada registrada exitosamente'
+        : 'Reserva manual creada exitosamente',
+      data: {
+        reserva: nuevaReserva,
+        ocupacion: ocupacion
+      }
+    });
+  } catch (error) {
+    console.error('Error al crear reserva manual:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear reserva manual',
+      error: process.env.NODE_ENV === 'development' ? error.message : {}
+    });
+  }
+};
+
 module.exports = {
   getAllReservas,
   getReservaById,
@@ -755,6 +961,7 @@ module.exports = {
   getReservasByEspacioId,
   verificarDisponibilidad,
   createReserva,
+  createReservaManual,
   updateReserva,
   updateEstadoReserva,
   aceptarReserva,

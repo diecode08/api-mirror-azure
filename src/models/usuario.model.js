@@ -110,13 +110,15 @@ class Usuario {
   /**
    * Buscar usuarios por rol
    * @param {string} rol - Rol a buscar
-   * @returns {Promise<Array>} Lista de usuarios con el rol especificado
+   * @returns {Promise<Array>} Lista de usuarios con el rol especificado (excluye eliminados y bloqueados)
    */
   static async findByRol(rol) {
     const { data, error } = await supabase
       .from('usuario')
       .select('*')
-      .eq('rol', rol);
+      .eq('rol', rol)
+      .is('deleted_at', null)
+      .eq('bloqueado', false);
     
     if (error) throw error;
     return data;

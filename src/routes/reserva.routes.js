@@ -11,6 +11,7 @@ router.get('/usuario/:userId', verifyToken, isOwner('params', 'userId'), reserva
 router.get('/espacio/:espacioId', verifyToken, reservaController.getReservasByEspacioId);
 router.post('/verificar-disponibilidad', verifyToken, reservaController.verificarDisponibilidad);
 router.post('/', verifyToken, reservaController.createReserva);
+router.post('/manual', verifyToken, reservaController.createReservaManual); // Reserva manual para invitados
 router.put('/:id', verifyToken, reservaController.updateReserva);
 router.patch('/:id/estado', verifyToken, reservaController.updateEstadoReserva);
 router.patch('/:id/aceptar', verifyToken, reservaController.aceptarReserva);

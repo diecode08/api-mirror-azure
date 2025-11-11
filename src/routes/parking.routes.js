@@ -162,13 +162,13 @@ router.patch('/:id/spaces/:spaceId/toggle-enabled', verifyToken, async (req, res
       return res.status(400).json({ success:false, message:'El espacio no pertenece a este parking' });
     }
 
-    // Regla de negocio: solo alternar entre 'disponible' <-> 'inhabilitado'.
+    // Regla de negocio: solo alternar entre 'disponible' <-> 'deshabilitado'.
     // Si está 'ocupado' o 'reservado', bloquear con 409.
     if (espacio.estado === 'ocupado' || espacio.estado === 'reservado') {
       return res.status(409).json({ success:false, message:`No se puede cambiar el estado mientras está '${espacio.estado}'.` });
     }
 
-    const nextEstado = espacio.estado === 'inhabilitado' ? 'disponible' : 'inhabilitado';
+    const nextEstado = (espacio.estado === 'deshabilitado' || espacio.estado === 'inhabilitado') ? 'disponible' : 'deshabilitado';
     // Responder de inmediato y procesar en background para evitar timeouts de cliente
     res.status(202).json({ success: true, data: { ...espacio, estado: nextEstado }, message: 'Cambio de estado en proceso' });
     ;(async () => {
