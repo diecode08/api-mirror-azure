@@ -37,6 +37,13 @@ class Historial {
         hora_fin,
         estado,
         fecha_reserva,
+        guest_nombre,
+        guest_documento,
+        guest_telefono,
+        guest_vehiculo_placa,
+        guest_vehiculo_marca,
+        guest_vehiculo_modelo,
+        guest_vehiculo_color,
         usuario:id_usuario(
           id_usuario,
           nombre,
@@ -80,6 +87,10 @@ class Historial {
         hora_salida,
         tiempo_total_minutos,
         monto_calculado,
+        guest_vehiculo_placa,
+        guest_vehiculo_marca,
+        guest_vehiculo_modelo,
+        guest_vehiculo_color,
         espacio!inner(
           id_espacio,
           numero_espacio,
@@ -192,6 +203,9 @@ class Historial {
           email: r.usuario.email,
           telefono: r.usuario.telefono
         } : null,
+        guest_nombre: r.guest_nombre || null,
+        guest_documento: r.guest_documento || null,
+        guest_telefono: r.guest_telefono || null,
         vehiculo: r.vehiculo ? {
           id_vehiculo: r.vehiculo.id_vehiculo,
           placa: r.vehiculo.placa,
@@ -199,6 +213,10 @@ class Historial {
           modelo: r.vehiculo.modelo,
           color: r.vehiculo.color
         } : null,
+        guest_vehiculo_placa: oc?.guest_vehiculo_placa || r.guest_vehiculo_placa || null,
+        guest_vehiculo_marca: oc?.guest_vehiculo_marca || r.guest_vehiculo_marca || null,
+        guest_vehiculo_modelo: oc?.guest_vehiculo_modelo || r.guest_vehiculo_modelo || null,
+        guest_vehiculo_color: oc?.guest_vehiculo_color || r.guest_vehiculo_color || null,
         espacio: r.espacio ? {
           id_espacio: r.espacio.id_espacio,
           numero_espacio: r.espacio.numero_espacio,
@@ -264,6 +282,9 @@ class Historial {
           email: oc.usuario.email,
           telefono: oc.usuario.telefono
         } : null,
+        guest_nombre: null,
+        guest_documento: null,
+        guest_telefono: null,
         vehiculo: oc.vehiculo ? {
           id_vehiculo: oc.vehiculo.id_vehiculo,
           placa: oc.vehiculo.placa,
@@ -271,6 +292,10 @@ class Historial {
           modelo: oc.vehiculo.modelo,
           color: oc.vehiculo.color
         } : null,
+        guest_vehiculo_placa: oc.guest_vehiculo_placa || null,
+        guest_vehiculo_marca: oc.guest_vehiculo_marca || null,
+        guest_vehiculo_modelo: oc.guest_vehiculo_modelo || null,
+        guest_vehiculo_color: oc.guest_vehiculo_color || null,
         espacio: oc.espacio ? {
           id_espacio: oc.espacio.id_espacio,
           numero_espacio: oc.espacio.numero_espacio,
