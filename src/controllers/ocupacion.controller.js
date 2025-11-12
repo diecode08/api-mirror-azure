@@ -173,11 +173,18 @@ const getOcupacionesActivas = async (req, res) => {
       monto_calculado: v.monto_calculado || null,
       costo_total: v.costo_actual || null,
       nombre_usuario: v.cliente || 'N/A',
+      guest_nombre: v.guest_nombre || null,
+      guest_documento: v.guest_documento || null,
+      guest_telefono: v.guest_telefono || null,
       numero_espacio: v.numero_espacio || 'N/A',
       placa: v.vehiculo_placa || null,
       marca: v.vehiculo_marca || null,
       modelo: v.vehiculo_modelo || null,
-      color: v.vehiculo_color || null
+      color: v.vehiculo_color || null,
+      guest_vehiculo_placa: v.vehiculo_placa || null,
+      guest_vehiculo_marca: v.vehiculo_marca || null,
+      guest_vehiculo_modelo: v.vehiculo_modelo || null,
+      guest_vehiculo_color: v.vehiculo_color || null
     }));
 
     return res.json({ success: true, data: resultado });

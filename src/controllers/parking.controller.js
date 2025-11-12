@@ -37,6 +37,81 @@ const getAllParkings = async (req, res) => {
       console.warn('[getAllParkings] Error enriqueciendo admin_nombre:', innerErr?.message);
     }
     
+    // Calcular ingresos del mes actual por parking
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    
+    try {
+      // Obtener ingresos agrupados por id_parking del mes actual
+      const { data: ingresosData, error: ingresosErr } = await supabase
+        .from('pago')
+        .select(`
+          monto,
+          ocupacion!inner(
+            id_espacio,
+            espacio!inner(id_parking)
+          )
+        `)
+        .eq('estado', 'completado')
+        .gte('fecha_pago', startOfMonth)
+        .lte('fecha_pago', endOfMonth);
+      
+      if (ingresosErr) {
+        console.warn('[getAllParkings] Error calculando ingresos:', ingresosErr?.message);
+      } else {
+        // Agrupar ingresos por parking
+        const ingresosPorParking = {};
+        (ingresosData || []).forEach(pago => {
+          const parkingId = pago.ocupacion?.espacio?.id_parking;
+          if (parkingId) {
+            ingresosPorParking[parkingId] = (ingresosPorParking[parkingId] || 0) + (pago.monto || 0);
+          }
+        });
+        
+        // Agregar revenue a cada parking
+        enriched = enriched.map(p => ({
+          ...p,
+          revenue: ingresosPorParking[p.id_parking] || 0
+        }));
+      }
+    } catch (revErr) {
+      console.warn('[getAllParkings] Error calculando revenue:', revErr?.message);
+      // Si falla, asignar 0 a todos
+      enriched = enriched.map(p => ({ ...p, revenue: 0 }));
+    }
+    
+      // Obtener tarifa horaria de cada parking
+      try {
+        const parkingIds = parkings.map(p => p.id_parking).filter(Boolean);
+        if (parkingIds.length > 0) {
+          const { data: tarifasData, error: tarifasErr } = await supabase
+            .from('tarifa')
+            .select('id_parking, monto')
+            .in('id_parking', parkingIds)
+            .eq('tipo', 'hora');
+        
+          if (tarifasErr) {
+            console.warn('[getAllParkings] Error obteniendo tarifas:', tarifasErr?.message);
+          } else {
+            // Crear mapa de tarifas por parking
+            const tarifasPorParking = {};
+            (tarifasData || []).forEach(t => {
+              tarifasPorParking[t.id_parking] = t.monto;
+            });
+          
+            // Agregar tarifa_hora a cada parking
+            enriched = enriched.map(p => ({
+              ...p,
+              tarifa_hora: tarifasPorParking[p.id_parking] || null
+            }));
+          }
+        }
+      } catch (tarifaErr) {
+        console.warn('[getAllParkings] Error obteniendo tarifas:', tarifaErr?.message);
+        enriched = enriched.map(p => ({ ...p, tarifa_hora: null }));
+      }
+    
     res.status(200).json({
       success: true,
       data: enriched
@@ -93,9 +168,36 @@ const getParkingsByAdminId = async (req, res) => {
     const { adminId } = req.params;
     const parkings = await Parking.getByAdminId(adminId);
     
+    // Enriquecer con tarifa horaria
+    let enriched = parkings;
+    try {
+      const parkingIds = parkings.map(p => p.id_parking).filter(Boolean);
+      if (parkingIds.length > 0) {
+        const { data: tarifasData, error: tarifasErr } = await supabase
+          .from('tarifa')
+          .select('id_parking, monto')
+          .in('id_parking', parkingIds)
+          .eq('tipo', 'hora');
+        
+        if (!tarifasErr && tarifasData) {
+          const tarifasPorParking = {};
+          tarifasData.forEach(t => {
+            tarifasPorParking[t.id_parking] = t.monto;
+          });
+          
+          enriched = parkings.map(p => ({
+            ...p,
+            tarifa_hora: tarifasPorParking[p.id_parking] || null
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('[getParkingsByAdminId] Error obteniendo tarifas:', err?.message);
+    }
+    
     res.status(200).json({
       success: true,
-      data: parkings
+      data: enriched
     });
   } catch (error) {
     console.error('Error al obtener parkings del administrador:', error);
@@ -232,9 +334,31 @@ const createParking = async (req, res) => {
     await Promise.all(espaciosPromises);
     console.log('Espacios creados exitosamente');
     
+    // Crear tarifa por hora automáticamente
+    console.log('Creando tarifa por hora por defecto...');
+    const montoTarifa = req.body.tarifa_hora || req.body.tarifa || 5.00; // Acepta tarifa_hora, tarifa, o default
+    console.log('[createParking] Monto tarifa a usar:', montoTarifa, 'desde req.body:', { tarifa_hora: req.body.tarifa_hora, tarifa: req.body.tarifa });
+    
+    const { data: tarifaData, error: tarifaError } = await supabase
+      .from('tarifa')
+      .insert([{
+        id_parking: nuevoParking.id_parking,
+        tipo: 'hora',
+        monto: parseFloat(montoTarifa),
+        condiciones: 'Tarifa estándar por hora'
+      }])
+      .select()
+      .single();
+    
+    if (tarifaError) {
+      console.warn('Advertencia: No se pudo crear tarifa automática:', tarifaError.message);
+    } else {
+      console.log('Tarifa por hora creada:', tarifaData);
+    }
+    
     res.status(201).json({
       success: true,
-      message: 'Parking registrado exitosamente con todos sus espacios',
+      message: 'Parking registrado exitosamente con todos sus espacios y tarifa',
       data: nuevoParking
     });
   } catch (error) {
@@ -265,13 +389,13 @@ const createParking = async (req, res) => {
 const updateParking = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, direccion, latitud, longitud, capacidad_total } = req.body;
+    const { nombre, direccion, latitud, longitud, capacidad_total, tarifa, tarifa_hora } = req.body;
 
     // Logs de entrada
     console.log('=== INICIO UPDATE PARKING ===');
     console.log('Params.id:', id);
     console.log('Usuario autenticado (req.user):', req.user);
-    console.log('Body recibido:', { nombre, direccion, latitud, longitud, capacidad_total });
+  console.log('Body recibido:', { nombre, direccion, latitud, longitud, capacidad_total, tarifa, tarifa_hora });
     
     // Verificar si el parking existe
     const existingParking = await Parking.getById(id);
@@ -339,12 +463,68 @@ const updateParking = async (req, res) => {
     
     console.log('[updateParking] Ejecutando actualización en modelo con:', parkingData);
     const updatedParking = await Parking.update(id, parkingData);
-    console.log('[updateParking] Resultado actualización:', updatedParking);
-    
+    console.log('[updateParking] Resultado actualización (parking base):', updatedParking);
+
+    // === Actualizar / crear tarifa hora si viene en el payload ===
+    const montoTarifaEntrada = tarifa_hora != null ? tarifa_hora : tarifa;
+    let tarifaHoraFinal = null;
+    if (montoTarifaEntrada !== undefined && montoTarifaEntrada !== null && montoTarifaEntrada !== '') {
+      const montoNum = parseFloat(montoTarifaEntrada);
+      if (!Number.isNaN(montoNum) && montoNum > 0) {
+        console.log('[updateParking] Procesando actualización de tarifa hora. monto:', montoNum);
+        // Buscar si ya existe tarifa tipo 'hora'
+        const { data: tarifasExistentes, error: tarifasErr } = await supabase
+          .from('tarifa')
+          .select('id_tarifa, tipo, monto')
+          .eq('id_parking', id)
+          .eq('tipo', 'hora')
+          .limit(1);
+        if (tarifasErr) {
+          console.warn('[updateParking] Error buscando tarifa hora existente:', tarifasErr.message);
+        } else if (tarifasExistentes && tarifasExistentes.length > 0) {
+          // Actualizar
+          const existing = tarifasExistentes[0];
+          console.log('[updateParking] Tarifa hora existente encontrada, id_tarifa:', existing.id_tarifa, 'monto actual:', existing.monto, 'nuevo:', montoNum);
+          const { error: updErr } = await supabase
+            .from('tarifa')
+            .update({ monto: montoNum })
+            .eq('id_tarifa', existing.id_tarifa);
+          if (updErr) {
+            console.warn('[updateParking] Error actualizando tarifa hora:', updErr.message);
+          } else {
+            tarifaHoraFinal = montoNum;
+          }
+        } else {
+          // Crear nueva tarifa hora
+          console.log('[updateParking] No existía tarifa hora. Creando nueva con monto:', montoNum);
+          const { data: insertData, error: insErr } = await supabase
+            .from('tarifa')
+            .insert({ id_parking: id, tipo: 'hora', monto: montoNum })
+            .select('id_tarifa, monto')
+            .limit(1);
+          if (insErr) {
+            console.warn('[updateParking] Error insertando nueva tarifa hora:', insErr.message);
+          } else {
+            tarifaHoraFinal = insertData?.[0]?.monto || montoNum;
+          }
+        }
+      } else {
+        console.warn('[updateParking] Valor de tarifa inválido, se ignora. recibido:', montoTarifaEntrada);
+      }
+    } else {
+      console.log('[updateParking] No se envió tarifa hora en el payload, se mantiene la existente.');
+    }
+
+    // Adjuntar tarifa_hora (si se pudo determinar) al objeto de respuesta
+    const respuesta = {
+      ...updatedParking,
+      tarifa_hora: tarifaHoraFinal !== null ? tarifaHoraFinal : undefined
+    };
+
     res.status(200).json({
       success: true,
       message: 'Parking actualizado exitosamente',
-      data: updatedParking
+      data: respuesta
     });
     console.log('=== FIN UPDATE PARKING (OK) ===');
   } catch (error) {

@@ -784,6 +784,10 @@ const createReservaManual = async (req, res) => {
       guest_nombre,
       guest_documento,
       guest_telefono,
+      guest_vehiculo_placa,
+      guest_vehiculo_marca,
+      guest_vehiculo_modelo,
+      guest_vehiculo_color,
       marcar_entrada = false
     } = req.body;
 
@@ -878,6 +882,10 @@ const createReservaManual = async (req, res) => {
       guest_nombre,
       guest_documento: guest_documento || null,
       guest_telefono: guest_telefono || null,
+      guest_vehiculo_placa: guest_vehiculo_placa || null,
+      guest_vehiculo_marca: guest_vehiculo_marca || null,
+      guest_vehiculo_modelo: guest_vehiculo_modelo || null,
+      guest_vehiculo_color: guest_vehiculo_color || null,
       tipo_origen: 'manual'
     };
 
@@ -901,6 +909,10 @@ const createReservaManual = async (req, res) => {
         id_espacio: parseInt(id_espacio),
         id_vehiculo: null,
         hora_entrada: ahora.toISOString(),
+        guest_vehiculo_placa: guest_vehiculo_placa || null,
+        guest_vehiculo_marca: guest_vehiculo_marca || null,
+        guest_vehiculo_modelo: guest_vehiculo_modelo || null,
+        guest_vehiculo_color: guest_vehiculo_color || null,
         tipo_origen: 'manual'
       };
 
